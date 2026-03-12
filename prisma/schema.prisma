@@ -1,0 +1,479 @@
+// InmoGest Pro - Schema de Base de Datos
+// Plataforma de Administración de Propiedades para Panamá
+// 
+// Configuración multi-entorno:
+// - Desarrollo: SQLite (por defecto)
+// - Producción: PostgreSQL (Supabase, Railway, Neon, etc.)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==================== CONFIGURACIÓN MULTI-ENTORNO ====================
+// Para DESARROLLO local con SQLite:
+//   DATABASE_URL="file:./dev.db"
+//   DIRECT_URL="file:./dev.db"
+//
+// Para PRODUCCIÓN con PostgreSQL (Supabase):
+//   DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?pgbouncer=true"
+//   DIRECT_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres"
+//
+// Para PRODUCCIÓN con PostgreSQL (Railway):
+//   DATABASE_URL="postgresql://postgres:[PASSWORD]@[HOST].railway.app:[PORT]/railway"
+//   DIRECT_URL="postgresql://postgres:[PASSWORD]@[HOST].railway.app:[PORT]/railway"
+//
+// Para PRODUCCIÓN con PostgreSQL (Neon):
+//   DATABASE_URL="postgresql://[USER]:[PASSWORD]@[HOST].neon.tech/[DB]?sslmode=require&pgbouncer=true"
+//   DIRECT_URL="postgresql://[USER]:[PASSWORD]@[HOST].neon.tech/[DB]?sslmode=require"
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+}
+
+// ==================== USUARIOS Y ROLES ====================
+
+enum UserRole {
+  ADMIN
+  INQUILINO
+  PROPIETARIO
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password     String
+  name         String
+  phone        String?
+  role         UserRole @default(INQUILINO)
+  avatar       String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relaciones
+  propertiesAsOwner      Property[]         @relation("OwnerProperties")
+  propertiesAsAdmin      Property[]         @relation("AdminProperties")
+  propertiesAsTenant     Property[]         @relation("TenantProperties")
+  contractsAsOwner       Contract[]         @relation("OwnerContracts")
+  contractsAsTenant      Contract[]         @relation("TenantContracts")
+  supportTickets         SupportTicket[]
+  payments               Payment[]
+  notifications          Notification[]
+  documents              Document[]
+}
+
+// ==================== PROPIEDADES ====================
+
+enum PropertyStatus {
+  DISPONIBLE
+  OCUPADA
+  MANTENIMIENTO
+  INACTIVA
+}
+
+enum PropertyType {
+  APARTAMENTO
+  CASA
+  LOCAL_COMERCIAL
+  OFICINA
+  BODEGA
+  TERRENO
+  PH
+}
+
+model Property {
+  id                String         @id @default(cuid())
+  title             String
+  description       String?        @db.Text
+  propertyType      PropertyType   @default(APARTAMENTO)
+  
+  // Ubicación específica para Panamá
+  province          String         // Provincia
+  district          String         // Distrito
+  corregimiento     String?        // Corregimiento
+  neighborhood      String?        // Urbanización/Barrio
+  address           String         // Dirección exacta
+  buildingName      String?        // Nombre del edificio/PH
+  
+  // Características
+  totalArea         Float          // m² totales
+  builtArea         Float?         // m² construidos
+  bedrooms          Int            // Recámaras
+  bathrooms         Int            // Baños
+  parkingSpaces     Int            // Estacionamientos
+  floorNumber       Int?           // Piso (para apartamentos/oficinas)
+  
+  // Datos legales Panamá
+  fincaNumber       String         // Número de Finca
+  tomoNumber        String?
+  folioNumber       String?
+  asientoNumber     String?
+  
+  // ITBMS y precios
+  monthlyRent       Float          // Alquiler mensual en USD
+  itbmsRate         Float          @default(7.0) // ITBMS % (7% Panamá)
+  depositAmount     Float          // Depósito en garantía
+  
+  // Estado y administración
+  status            PropertyStatus @default(DISPONIBLE)
+  isActive          Boolean        @default(true)
+  
+  // Imágenes
+  mainImage         String?
+  images            String?        @db.Text // JSON array de URLs de imágenes
+  
+  // Fechas
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  
+  // Relaciones
+  ownerId           String
+  owner             User           @relation("OwnerProperties", fields: [ownerId], references: [id], onDelete: Cascade)
+  adminId           String
+  admin             User           @relation("AdminProperties", fields: [adminId], references: [id], onDelete: Cascade)
+  tenantId          String?
+  tenant            User?          @relation("TenantProperties", fields: [tenantId], references: [id], onDelete: SetNull)
+  
+  contracts         Contract[]
+  expenses          Expense[]
+  supportTickets    SupportTicket[]
+  documents         Document[]
+  financialReports  FinancialReport[]
+  payments          Payment[]
+
+  @@index([ownerId])
+  @@index([adminId])
+  @@index([tenantId])
+  @@index([status])
+  @@index([province])
+}
+
+// ==================== CONTRATOS ====================
+
+enum ContractType {
+  ADMINISTRACION   // Contrato Admin-Dueño
+  ARRENDAMIENTO    // Contrato Dueño-Inquilino
+}
+
+enum ContractStatus {
+  VIGENTE
+  VENCIDO
+  CANCELADO
+  RENOVADO
+}
+
+model Contract {
+  id              String         @id @default(cuid())
+  contractType    ContractType
+  contractNumber  String         @unique
+  startDate       DateTime       @db.Timestamp
+  endDate         DateTime       @db.Timestamp
+  monthlyAmount   Float
+  itbmsAmount     Float          // ITBMS incluido
+  depositAmount   Float?
+  
+  // Términos y condiciones
+  terms           String?        @db.Text
+  
+  // Documento PDF
+  documentUrl     String?
+  
+  // Estado
+  status          ContractStatus @default(VIGENTE)
+  
+  // Fechas
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  // Relaciones
+  propertyId      String
+  property        Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  ownerId         String
+  owner           User           @relation("OwnerContracts", fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  tenantId        String?
+  tenant          User?          @relation("TenantContracts", fields: [tenantId], references: [id], onDelete: SetNull)
+  
+  payments        Payment[]
+
+  @@index([propertyId])
+  @@index([ownerId])
+  @@index([tenantId])
+  @@index([status])
+}
+
+// ==================== GASTOS Y FACTURAS ====================
+
+enum ExpenseCategory {
+  MANTENIMIENTO_PH
+  SEGURO
+  SERVICIOS_BASICOS
+  REPARACION
+  SERVICIO_TECNICO
+  IMPUESTOS
+  COMISION_ADMIN
+  OTROS
+}
+
+enum ExpenseType {
+  FIJO            // Costos fijos mensuales
+  VARIABLE        // Costos variables/ocasionales
+}
+
+model Expense {
+  id              String          @id @default(cuid())
+  title           String
+  description     String?         @db.Text
+  category        ExpenseCategory
+  expenseType     ExpenseType     @default(VARIABLE)
+  
+  // Montos
+  amount          Float           // Monto sin ITBMS
+  itbmsAmount     Float           // ITBMS (7%)
+  totalAmount     Float           // Total con ITBMS
+  
+  // Facturación
+  invoiceNumber   String?
+  invoiceDate     DateTime?       @db.Timestamp
+  supplier        String?         // Proveedor
+  
+  // Evidencia
+  invoiceImage    String?         // Foto de la factura
+  workEvidence    String?         @db.Text // Evidencia fotográfica del trabajo realizado
+  
+  // Fecha del gasto
+  expenseDate     DateTime        @db.Timestamp
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relaciones
+  propertyId      String
+  property        Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([category])
+  @@index([expenseDate])
+}
+
+// ==================== SOPORTE Y TICKETS ====================
+
+enum TicketStatus {
+  ABIERTO
+  EN_PROCESO
+  RESUELTO
+  CERRADO
+}
+
+enum TicketPriority {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+model SupportTicket {
+  id              String         @id @default(cuid())
+  title           String
+  description     String         @db.Text
+  category        String?        // Categoría del problema
+  
+  // Estado y prioridad
+  status          TicketStatus   @default(ABIERTO)
+  priority        TicketPriority @default(MEDIA)
+  
+  // Evidencia
+  photos          String?        @db.Text // JSON array de URLs de fotos
+  
+  // Respuesta
+  response        String?        @db.Text
+  respondedAt     DateTime?      @db.Timestamp
+  respondedBy     String?        // ID del admin que respondió
+  
+  // Fechas
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  resolvedAt      DateTime?      @db.Timestamp
+  
+  // Relaciones
+  propertyId      String
+  property        Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+}
+
+// ==================== PAGOS ====================
+
+enum PaymentStatus {
+  PENDIENTE
+  PAGADO
+  ATRASADO
+  PARCIAL
+  CANCELADO
+}
+
+enum PaymentType {
+  ALQUILER
+  DEPOSITO
+  MANTENIMIENTO
+  COMISION
+  OTROS
+}
+
+model Payment {
+  id              String         @id @default(cuid())
+  paymentType     PaymentType
+  amount          Float
+  itbmsAmount     Float
+  totalAmount     Float
+  
+  // Referencia
+  referenceNumber String?
+  paymentMethod   String?        // Transferencia, Efectivo, Cheque
+  
+  // Estado
+  status          PaymentStatus  @default(PENDIENTE)
+  paidAt          DateTime?      @db.Timestamp
+  dueDate         DateTime       @db.Timestamp
+  
+  // Comprobante
+  receiptImage    String?
+  
+  // Fechas
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  // Relaciones
+  propertyId      String
+  property        Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contractId      String?
+  contract        Contract?      @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([userId])
+  @@index([contractId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+// ==================== REPORTES FINANCIEROS ====================
+
+model FinancialReport {
+  id              String   @id @default(cuid())
+  month           Int      // 1-12
+  year            Int
+  
+  // Ingresos
+  grossIncome     Float    // Ingresos brutos
+  
+  // Gastos fijos
+  fixedExpenses   Float    // Costos fijos (mantenimiento PH, seguros)
+  
+  // Gastos variables
+  repairsExpenses Float    // Reparaciones y servicios
+  
+  // Totales
+  totalExpenses   Float    // Total gastos
+  netIncome       Float    // Ingreso neto
+  
+  // ITBMS
+  itbmsCollected  Float    // ITBMS recaudado
+  itbmsPaid       Float    // ITBMS pagado en gastos
+  
+  // Estado
+  isGenerated     Boolean  @default(false)
+  
+  // Fechas
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relaciones
+  propertyId      String
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, month, year]) // Un reporte por propiedad/mes/año
+  @@index([propertyId])
+  @@index([year, month])
+}
+
+// ==================== DOCUMENTOS ====================
+
+enum DocumentType {
+  CONTRATO_ADMINISTRACION
+  CONTRATO_ARRENDAMIENTO
+  FACTURA
+  RECIBO
+  ESCRITURA
+  INFORME
+  OTRO
+}
+
+model Document {
+  id              String       @id @default(cuid())
+  title           String
+  description     String?      @db.Text
+  documentType    DocumentType
+  
+  // Archivo
+  fileUrl         String
+  fileName        String
+  fileSize        Int?
+  mimeType        String?
+  
+  // Fechas
+  uploadedAt      DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  // Relaciones
+  propertyId      String
+  property        Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  uploadedBy      String
+  uploader        User         @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([uploadedBy])
+  @@index([documentType])
+}
+
+// ==================== NOTIFICACIONES ====================
+
+model Notification {
+  id          String   @id @default(cuid())
+  title       String
+  message     String   @db.Text
+  type        String   // Tipo de notificación
+  isRead      Boolean  @default(false)
+  link        String?  // Enlace opcional
+  
+  createdAt   DateTime @default(now())
+  
+  // Relaciones
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ==================== DASHBOARD STATS ====================
+
+model DashboardStats {
+  id                String   @id @default(cuid())
+  totalProperties   Int      @default(0)
+  activeContracts   Int      @default(0)
+  pendingPayments   Int      @default(0)
+  openTickets       Int      @default(0)
+  monthlyRevenue    Float    @default(0)
+  totalExpenses     Float    @default(0)
+  updatedAt         DateTime @updatedAt
+}
