@@ -2,19 +2,42 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hash } from 'bcryptjs';
 
-// POST - Poblar base de datos con datos de demostración
-export async function POST() {
+// GET - Crear datos de demostración (si no existen) y mostrar estado
+export async function GET() {
   try {
     // Verificar si ya hay datos
     const existingUsers = await db.user.count();
     
     if (existingUsers > 0) {
+      // Ya hay datos, solo mostrar estado
+      const properties = await db.property.count();
+      const contracts = await db.contract.count();
+      const expenses = await db.expense.count();
+      const payments = await db.payment.count();
+      const tickets = await db.supportTicket.count();
+      const documents = await db.document.count();
+      const notifications = await db.notification.count();
+
       return NextResponse.json({
-        success: false,
-        message: 'La base de datos ya contiene datos. Use el endpoint de reset primero.',
-      }, { status: 400 });
+        success: true,
+        message: 'La base de datos ya contiene datos.',
+        data: {
+          isSeeded: true,
+          counts: {
+            users: existingUsers,
+            properties,
+            contracts,
+            expenses,
+            payments,
+            tickets,
+            documents,
+            notifications,
+          },
+        },
+      });
     }
 
+    // No hay datos, crear datos de demostración
     // Hash de contraseñas
     const hashedPassword = await hash('demo123', 10);
 
@@ -236,55 +259,51 @@ export async function POST() {
     });
 
     // Crear contratos
-    const contract1 = await db.contract.create({
-      data: {
-        contractType: 'ARRENDAMIENTO',
-        contractNumber: 'CTR-2024-001',
-        startDate: new Date('2024-01-01'),
-        endDate: new Date('2025-12-31'),
-        monthlyAmount: 2500.00,
-        itbmsAmount: 175.00,
-        depositAmount: 2500.00,
-        terms: 'Contrato de arrendamiento estándar con opción a renovación.',
-        status: 'VIGENTE',
-        propertyId: property1.id,
-        ownerId: owner1.id,
-        tenantId: tenant1.id,
-      },
-    });
-
-    const contract2 = await db.contract.create({
-      data: {
-        contractType: 'ARRENDAMIENTO',
-        contractNumber: 'CTR-2024-002',
-        startDate: new Date('2024-03-01'),
-        endDate: new Date('2025-02-28'),
-        monthlyAmount: 1800.00,
-        itbmsAmount: 126.00,
-        depositAmount: 1800.00,
-        terms: 'Contrato de arrendamiento para casa familiar.',
-        status: 'VIGENTE',
-        propertyId: property2.id,
-        ownerId: owner2.id,
-        tenantId: tenant2.id,
-      },
-    });
-
-    const contract3 = await db.contract.create({
-      data: {
-        contractType: 'ARRENDAMIENTO',
-        contractNumber: 'CTR-2024-003',
-        startDate: new Date('2024-06-01'),
-        endDate: new Date('2025-05-31'),
-        monthlyAmount: 4200.00,
-        itbmsAmount: 294.00,
-        depositAmount: 4200.00,
-        terms: 'Contrato de arrendamiento de oficina ejecutiva.',
-        status: 'VIGENTE',
-        propertyId: property4.id,
-        ownerId: owner2.id,
-        tenantId: tenant3.id,
-      },
+    await db.contract.createMany({
+      data: [
+        {
+          contractType: 'ARRENDAMIENTO',
+          contractNumber: 'CTR-2024-001',
+          startDate: new Date('2024-01-01'),
+          endDate: new Date('2025-12-31'),
+          monthlyAmount: 2500.00,
+          itbmsAmount: 175.00,
+          depositAmount: 2500.00,
+          terms: 'Contrato de arrendamiento estándar con opción a renovación.',
+          status: 'VIGENTE',
+          propertyId: property1.id,
+          ownerId: owner1.id,
+          tenantId: tenant1.id,
+        },
+        {
+          contractType: 'ARRENDAMIENTO',
+          contractNumber: 'CTR-2024-002',
+          startDate: new Date('2024-03-01'),
+          endDate: new Date('2025-02-28'),
+          monthlyAmount: 1800.00,
+          itbmsAmount: 126.00,
+          depositAmount: 1800.00,
+          terms: 'Contrato de arrendamiento para casa familiar.',
+          status: 'VIGENTE',
+          propertyId: property2.id,
+          ownerId: owner2.id,
+          tenantId: tenant2.id,
+        },
+        {
+          contractType: 'ARRENDAMIENTO',
+          contractNumber: 'CTR-2024-003',
+          startDate: new Date('2024-06-01'),
+          endDate: new Date('2025-05-31'),
+          monthlyAmount: 4200.00,
+          itbmsAmount: 294.00,
+          depositAmount: 4200.00,
+          terms: 'Contrato de arrendamiento de oficina ejecutiva.',
+          status: 'VIGENTE',
+          propertyId: property4.id,
+          ownerId: owner2.id,
+          tenantId: tenant3.id,
+        },
+      ],
     });
 
     // Crear gastos
@@ -336,32 +355,6 @@ export async function POST() {
           expenseDate: new Date(currentYear, currentMonth, 15),
           propertyId: property2.id,
         },
-        {
-          title: 'Reparación plomería',
-          description: 'Fuga de agua en baño principal',
-          category: 'REPARACION',
-          expenseType: 'VARIABLE',
-          amount: 200.00,
-          itbmsAmount: 14.00,
-          totalAmount: 214.00,
-          invoiceNumber: 'INV-PLM-001',
-          invoiceDate: new Date(currentYear, currentMonth - 1, 20),
-          supplier: 'Plomería Express',
-          expenseDate: new Date(currentYear, currentMonth - 1, 22),
-          propertyId: property2.id,
-        },
-        {
-          title: 'Comisión administrativa',
-          description: 'Comisión mensual de administración',
-          category: 'COMISION_ADMIN',
-          expenseType: 'FIJO',
-          amount: 350.00,
-          itbmsAmount: 24.50,
-          totalAmount: 374.50,
-          invoiceDate: new Date(currentYear, currentMonth, 1),
-          expenseDate: new Date(currentYear, currentMonth, 1),
-          propertyId: property4.id,
-        },
       ],
     });
 
@@ -380,7 +373,6 @@ export async function POST() {
           dueDate: new Date(currentYear, currentMonth, 5),
           propertyId: property1.id,
           userId: tenant1.id,
-          contractId: contract1.id,
         },
         {
           paymentType: 'ALQUILER',
@@ -394,7 +386,6 @@ export async function POST() {
           dueDate: new Date(currentYear, currentMonth, 3),
           propertyId: property2.id,
           userId: tenant2.id,
-          contractId: contract2.id,
         },
         {
           paymentType: 'ALQUILER',
@@ -405,21 +396,6 @@ export async function POST() {
           dueDate: new Date(currentYear, currentMonth, 15),
           propertyId: property4.id,
           userId: tenant3.id,
-          contractId: contract3.id,
-        },
-        {
-          paymentType: 'DEPOSITO',
-          amount: 2500.00,
-          itbmsAmount: 0,
-          totalAmount: 2500.00,
-          referenceNumber: 'DEP-2024-001',
-          paymentMethod: 'TRANSFERENCIA',
-          status: 'PAGADO',
-          paidAt: new Date(currentYear - 1, 11, 20),
-          dueDate: new Date(currentYear - 1, 11, 25),
-          propertyId: property1.id,
-          userId: tenant1.id,
-          contractId: contract1.id,
         },
       ],
     });
@@ -429,7 +405,7 @@ export async function POST() {
       data: [
         {
           title: 'Fuga de agua en cocina',
-          description: 'Se detectó una fuga de agua debajo del fregadero de la cocina. Necesita reparación urgente.',
+          description: 'Se detectó una fuga de agua debajo del fregadero de la cocina.',
           category: 'Plomería',
           priority: 'ALTA',
           status: 'EN_PROCESO',
@@ -444,18 +420,6 @@ export async function POST() {
           status: 'ABIERTO',
           propertyId: property1.id,
           userId: tenant1.id,
-        },
-        {
-          title: 'Puerta del garón atascada',
-          description: 'La puerta del garón no abre correctamente, parece estar atascada.',
-          category: 'General',
-          priority: 'BAJA',
-          status: 'RESUELTO',
-          response: 'Se realizó la reparación de la puerta. Se lubricaron las bisagras y se ajustó el marco.',
-          respondedAt: new Date(currentYear, currentMonth - 1, 15),
-          resolvedAt: new Date(currentYear, currentMonth - 1, 16),
-          propertyId: property2.id,
-          userId: tenant2.id,
         },
       ],
     });
@@ -485,17 +449,6 @@ export async function POST() {
           propertyId: property1.id,
           uploadedBy: owner1.id,
         },
-        {
-          title: 'Recibo de Depósito',
-          description: 'Comprobante de depósito en garantía',
-          documentType: 'RECIBO',
-          fileUrl: '/documents/recibo_001.pdf',
-          fileName: 'recibo_001.pdf',
-          fileSize: 131072,
-          mimeType: 'application/pdf',
-          propertyId: property1.id,
-          uploadedBy: admin.id,
-        },
       ],
     });
 
@@ -504,7 +457,7 @@ export async function POST() {
       data: [
         {
           title: 'Bienvenido a InmoGest Pro',
-          message: 'Su cuenta ha sido creada exitosamente. Explore todas las funcionalidades de la plataforma.',
+          message: 'Su cuenta ha sido creada exitosamente.',
           type: 'SYSTEM',
           userId: admin.id,
         },
@@ -514,13 +467,6 @@ export async function POST() {
           type: 'PAYMENT',
           link: '/payments',
           userId: owner1.id,
-        },
-        {
-          title: 'Ticket de soporte abierto',
-          message: 'Se ha abierto un nuevo ticket de soporte para su propiedad en Punta Paitilla.',
-          type: 'TICKET',
-          link: '/tickets',
-          userId: admin.id,
         },
       ],
     });
@@ -539,7 +485,7 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      message: 'Base de datos poblada exitosamente con datos de demostración',
+      message: '¡Base de datos poblada exitosamente con datos de demostración!',
       data: {
         users: {
           admins: 1,
@@ -548,11 +494,11 @@ export async function POST() {
         },
         properties: 5,
         contracts: 3,
-        expenses: 5,
-        payments: 4,
-        tickets: 3,
-        documents: 3,
-        notifications: 3,
+        expenses: 3,
+        payments: 3,
+        tickets: 2,
+        documents: 2,
+        notifications: 2,
         credentials: {
           admin: 'admin@inmogest.pa',
           owner1: 'juan.perez@email.com',
@@ -574,40 +520,7 @@ export async function POST() {
   }
 }
 
-// GET - Verificar estado de la base de datos
-export async function GET() {
-  try {
-    const users = await db.user.count();
-    const properties = await db.property.count();
-    const contracts = await db.contract.count();
-    const expenses = await db.expense.count();
-    const payments = await db.payment.count();
-    const tickets = await db.supportTicket.count();
-    const documents = await db.document.count();
-    const notifications = await db.notification.count();
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        isSeeded: users > 0,
-        counts: {
-          users,
-          properties,
-          contracts,
-          expenses,
-          payments,
-          tickets,
-          documents,
-          notifications,
-        },
-      },
-    });
-  } catch (error) {
-    console.error('Error al verificar estado:', error);
-    return NextResponse.json({
-      success: false,
-      error: 'Error al verificar el estado de la base de datos',
-      message: error instanceof Error ? error.message : 'Error desconocido',
-    }, { status: 500 });
-  }
+// POST - Igual que GET para compatibilidad
+export async function POST() {
+  return GET();
 }

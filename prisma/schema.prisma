@@ -86,7 +86,7 @@ enum PropertyType {
 model Property {
   id                String         @id @default(cuid())
   title             String
-  description       String?        @db.Text
+  description       String?
   propertyType      PropertyType   @default(APARTAMENTO)
   
   // Ubicación específica para Panamá
@@ -122,7 +122,7 @@ model Property {
   
   // Imágenes
   mainImage         String?
-  images            String?        @db.Text // JSON array de URLs de imágenes
+  images            String?        // JSON array de URLs de imágenes
   
   // Fechas
   createdAt         DateTime       @default(now())
@@ -168,14 +168,14 @@ model Contract {
   id              String         @id @default(cuid())
   contractType    ContractType
   contractNumber  String         @unique
-  startDate       DateTime       @db.Timestamp
-  endDate         DateTime       @db.Timestamp
+  startDate       DateTime
+  endDate         DateTime
   monthlyAmount   Float
   itbmsAmount     Float          // ITBMS incluido
   depositAmount   Float?
   
   // Términos y condiciones
-  terms           String?        @db.Text
+  terms           String?
   
   // Documento PDF
   documentUrl     String?
@@ -226,7 +226,7 @@ enum ExpenseType {
 model Expense {
   id              String          @id @default(cuid())
   title           String
-  description     String?         @db.Text
+  description     String?
   category        ExpenseCategory
   expenseType     ExpenseType     @default(VARIABLE)
   
@@ -237,15 +237,15 @@ model Expense {
   
   // Facturación
   invoiceNumber   String?
-  invoiceDate     DateTime?       @db.Timestamp
+  invoiceDate     DateTime?
   supplier        String?         // Proveedor
   
   // Evidencia
   invoiceImage    String?         // Foto de la factura
-  workEvidence    String?         @db.Text // Evidencia fotográfica del trabajo realizado
+  workEvidence    String?         // Evidencia fotográfica del trabajo realizado
   
   // Fecha del gasto
-  expenseDate     DateTime        @db.Timestamp
+  expenseDate     DateTime
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   
@@ -277,7 +277,7 @@ enum TicketPriority {
 model SupportTicket {
   id              String         @id @default(cuid())
   title           String
-  description     String         @db.Text
+  description     String
   category        String?        // Categoría del problema
   
   // Estado y prioridad
@@ -285,17 +285,17 @@ model SupportTicket {
   priority        TicketPriority @default(MEDIA)
   
   // Evidencia
-  photos          String?        @db.Text // JSON array de URLs de fotos
+  photos          String?        // JSON array de URLs de fotos
   
   // Respuesta
-  response        String?        @db.Text
-  respondedAt     DateTime?      @db.Timestamp
+  response        String?
+  respondedAt     DateTime?
   respondedBy     String?        // ID del admin que respondió
   
   // Fechas
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
-  resolvedAt      DateTime?      @db.Timestamp
+  resolvedAt      DateTime?
   
   // Relaciones
   propertyId      String
@@ -340,8 +340,8 @@ model Payment {
   
   // Estado
   status          PaymentStatus  @default(PENDIENTE)
-  paidAt          DateTime?      @db.Timestamp
-  dueDate         DateTime       @db.Timestamp
+  paidAt          DateTime?
+  dueDate         DateTime
   
   // Comprobante
   receiptImage    String?
@@ -420,7 +420,7 @@ enum DocumentType {
 model Document {
   id              String       @id @default(cuid())
   title           String
-  description     String?      @db.Text
+  description     String?
   documentType    DocumentType
   
   // Archivo
@@ -449,7 +449,7 @@ model Document {
 model Notification {
   id          String   @id @default(cuid())
   title       String
-  message     String   @db.Text
+  message     String
   type        String   // Tipo de notificación
   isRead      Boolean  @default(false)
   link        String?  // Enlace opcional
