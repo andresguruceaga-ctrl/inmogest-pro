@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  // Force fresh start - updated for Supabase connection
+  experimental: {
+    // Enable experimental features
+  },
 };
 
 export default nextConfig;
