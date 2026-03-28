@@ -16,6 +16,8 @@
     "db:seed": "bun run src/app/api/seed/route.ts",
     "db:use-sqlite": "cp prisma/schema.sqlite.prisma prisma/schema.prisma && prisma generate",
     "db:use-postgres": "git checkout prisma/schema.prisma && prisma generate",
+    "db:export": "bun run scripts/export-data.ts",
+    "db:import": "bun run scripts/import-data.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
