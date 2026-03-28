@@ -17,6 +17,8 @@ interface ReportPDFData {
       propertiesCount?: number
       avgOccupancy?: number
       avgMonthlyIncome?: number
+      pendingReimbursement?: number
+      totalReimbursed?: number
     }
     properties: Array<{
       propertyId: string
@@ -46,10 +48,16 @@ interface ReportPDFData {
         progress?: number
       } | null
       expensesDetails?: {
-        fixed: Array<{ id: string; description: string; amount: number; date: string; category: string }>
-        variable: Array<{ id: string; description: string; amount: number; date: string; category: string }>
+        fixed: Array<{ id: string; description: string; amount: number; date: string; category: string; paidByAdmin?: boolean; reimbursedByOwner?: boolean }>
+        variable: Array<{ id: string; description: string; amount: number; date: string; category: string; paidByAdmin?: boolean; reimbursedByOwner?: boolean }>
       }
       paymentsDetails?: Array<{ id: string; amount: number; date: string; type: string; tenant?: string }>
+      adminBalance?: {
+        totalAdminPaid: number
+        pendingReimbursement: number
+        totalReimbursed: number
+        adminExpenses: Array<{ id: string; description: string; amount: number; date: Date; category: string; reimbursed: boolean; reimbursedAt?: Date | null }>
+      }
     }>
     monthlyData?: Array<{
       month: number
@@ -387,6 +395,51 @@ export function generateReportPDF(report: ReportPDFData): jsPDF {
 
   // Get the final Y position after the table
   y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY + 15 || 100
+
+  // Admin Balance Section
+  const totalPendingReimbursement = report.data.totals.pendingReimbursement || 
+    properties.reduce((sum, p) => sum + (p.adminBalance?.pendingReimbursement || 0), 0)
+  const totalReimbursed = report.data.totals.totalReimbursed || 
+    properties.reduce((sum, p) => sum + (p.adminBalance?.totalReimbursed || 0), 0)
+  const totalAdminPaid = properties.reduce((sum, p) => sum + (p.adminBalance?.totalAdminPaid || 0), 0)
+
+  if (totalAdminPaid > 0) {
+    // Check if we need a new page
+    if (y > pageHeight - 80) {
+      doc.addPage()
+      y = 20
+    }
+
+    doc.setFontSize(14)
+    doc.setTextColor(40, 40, 40)
+    doc.text('Balance de Gastos Administrados', 14, y)
+    y += 8
+
+    // Highlighted box for admin balance
+    doc.setFillColor(254, 243, 199) // amber-100
+    doc.roundedRect(14, y, pageWidth - 28, 35, 3, 3, 'F')
+    doc.setDrawColor(251, 191, 36) // amber-400
+    doc.roundedRect(14, y, pageWidth - 28, 35, 3, 3, 'S')
+
+    doc.setFontSize(10)
+    doc.setTextColor(120, 53, 15) // amber-900
+    
+    doc.text('Total Pagado por Administración:', 20, y + 12)
+    doc.setTextColor(0, 0, 0)
+    doc.text(formatCurrency(totalAdminPaid), 100, y + 12)
+    
+    doc.setTextColor(120, 53, 15)
+    doc.text('Total Reembolsado:', 20, y + 22)
+    doc.setTextColor(22, 101, 52) // emerald-700
+    doc.text(formatCurrency(totalReimbursed), 100, y + 22)
+    
+    doc.setTextColor(120, 53, 15)
+    doc.text('Pendiente de Reembolso:', 20, y + 32)
+    doc.setTextColor(185, 28, 28) // red-700
+    doc.text(formatCurrency(totalPendingReimbursement), 100, y + 32)
+
+    y += 45
+  }
 
   // Admin Summary Section (optional)
   if (report.adminSummary && report.adminSummary.trim()) {
@@ -763,6 +816,55 @@ export function generateReportPDF(report: ReportPDFData): jsPDF {
         3: { cellWidth: 25 },
         4: { cellWidth: 20 },
         5: { cellWidth: 25 },
+      },
+    })
+
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY + 10 || 100
+  }
+
+  // Admin Expenses Detail Section
+  const allAdminExpenses: Array<{ description: string; amount: number; date: Date; category: string; reimbursed: boolean; property: string }> = []
+  properties.forEach(prop => {
+    if (prop.adminBalance?.adminExpenses) {
+      prop.adminBalance.adminExpenses.forEach(e => {
+        allAdminExpenses.push({ ...e, property: prop.propertyTitle })
+      })
+    }
+  })
+
+  if (allAdminExpenses.length > 0) {
+    // Check if we need a new page
+    if (y > pageHeight - 80) {
+      doc.addPage()
+      y = 20
+    }
+
+    doc.setFontSize(14)
+    doc.setTextColor(40, 40, 40)
+    doc.text('Detalle de Gastos Pagados por Administración', 14, y)
+    y += 4
+
+    const adminExpensesData = allAdminExpenses.map(e => [
+      e.description,
+      e.property,
+      categoryLabels[e.category] || e.category,
+      formatCurrency(e.amount),
+      e.reimbursed ? 'Sí' : 'Pendiente',
+    ])
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Descripción', 'Propiedad', 'Categoría', 'Monto', 'Reembolsado']],
+      body: adminExpensesData,
+      theme: 'striped',
+      headStyles: { fillColor: [217, 119, 6] }, // amber-600
+      styles: { fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 50 },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 30, halign: 'right' },
+        4: { cellWidth: 25, halign: 'center' },
       },
     })
   }

@@ -145,6 +145,15 @@ async function generateMonthlyReport(
       contractProgress = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100));
     }
 
+    // Calculate admin expense balance
+    const adminPaidExpenses = property.expenses.filter(e => e.paidByAdmin);
+    const pendingReimbursement = adminPaidExpenses
+      .filter(e => !e.reimbursedByOwner)
+      .reduce((sum, e) => sum + e.totalAmount, 0);
+    const totalReimbursed = adminPaidExpenses
+      .filter(e => e.reimbursedByOwner)
+      .reduce((sum, e) => sum + e.totalAmount, 0);
+
     return {
       propertyId: property.id,
       propertyTitle: property.title,
@@ -185,6 +194,8 @@ async function generateMonthlyReport(
           amount: e.totalAmount,
           date: e.expenseDate,
           category: e.category,
+          paidByAdmin: e.paidByAdmin,
+          reimbursedByOwner: e.reimbursedByOwner,
         })),
         variable: variableExpensesList.map(e => ({
           id: e.id,
@@ -192,6 +203,22 @@ async function generateMonthlyReport(
           amount: e.totalAmount,
           date: e.expenseDate,
           category: e.category,
+          paidByAdmin: e.paidByAdmin,
+          reimbursedByOwner: e.reimbursedByOwner,
+        })),
+      },
+      adminBalance: {
+        totalAdminPaid: adminPaidExpenses.reduce((sum, e) => sum + e.totalAmount, 0),
+        pendingReimbursement,
+        totalReimbursed,
+        adminExpenses: adminPaidExpenses.map(e => ({
+          id: e.id,
+          description: e.description || e.title,
+          amount: e.totalAmount,
+          date: e.expenseDate,
+          category: e.category,
+          reimbursed: e.reimbursedByOwner,
+          reimbursedAt: e.reimbursedAt,
         })),
       },
       paymentsDetails: property.payments.map(p => ({
@@ -214,6 +241,8 @@ async function generateMonthlyReport(
       netIncome: acc.netIncome + p.netIncome,
       itbmsCollected: acc.itbmsCollected + p.itbmsCollected,
       itbmsPaid: acc.itbmsPaid + p.itbmsPaid,
+      pendingReimbursement: acc.pendingReimbursement + p.adminBalance.pendingReimbursement,
+      totalReimbursed: acc.totalReimbursed + p.adminBalance.totalReimbursed,
     }),
     {
       grossIncome: 0,
@@ -223,6 +252,8 @@ async function generateMonthlyReport(
       netIncome: 0,
       itbmsCollected: 0,
       itbmsPaid: 0,
+      pendingReimbursement: 0,
+      totalReimbursed: 0,
     }
   );
 

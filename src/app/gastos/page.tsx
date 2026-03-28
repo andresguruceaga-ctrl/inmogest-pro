@@ -31,6 +31,9 @@ interface Expense {
   invoiceNumber: string | null
   supplier: string | null
   expenseDate: string
+  paidByAdmin: boolean
+  reimbursedByOwner: boolean
+  reimbursedAt: string | null
   property: { id: string; title: string; address: string } | null
 }
 
@@ -95,6 +98,8 @@ export default function GastosPage() {
     expenseDate: '',
     propertyId: '',
     includeItbms: true,
+    paidByAdmin: false,
+    reimbursedByOwner: false,
   })
 
   // Delete confirmation state
@@ -113,6 +118,8 @@ export default function GastosPage() {
     expenseDate: '',
     propertyId: '',
     includeItbms: true,
+    paidByAdmin: false,
+    reimbursedByOwner: false,
   })
 
   // Memoized valid property ID for edit form
@@ -180,6 +187,8 @@ export default function GastosPage() {
           supplier: formData.supplier || null,
           expenseDate: formData.expenseDate,
           propertyId: formData.propertyId,
+          paidByAdmin: formData.paidByAdmin,
+          reimbursedByOwner: formData.reimbursedByOwner,
         }),
       })
 
@@ -279,6 +288,8 @@ export default function GastosPage() {
           supplier: editFormData.supplier?.trim() || null,
           expenseDate: editFormData.expenseDate,
           propertyId: editFormData.propertyId,
+          paidByAdmin: editFormData.paidByAdmin,
+          reimbursedByOwner: editFormData.reimbursedByOwner,
         }),
       })
 
@@ -409,6 +420,8 @@ export default function GastosPage() {
       expenseDate: expenseDateStr,
       propertyId: propertyId,
       includeItbms: Number(expense.itbmsAmount ?? 0) > 0,
+      paidByAdmin: expense.paidByAdmin || false,
+      reimbursedByOwner: expense.reimbursedByOwner || false,
     })
     setEditOpen(true)
   }
@@ -430,6 +443,8 @@ export default function GastosPage() {
       expenseDate: '',
       propertyId: '',
       includeItbms: true,
+      paidByAdmin: false,
+      reimbursedByOwner: false,
     })
   }
 
@@ -547,9 +562,22 @@ export default function GastosPage() {
                           </TableCell>
                           <TableCell className="hidden md:table-cell">{getCategoryLabel(expense.category)}</TableCell>
                           <TableCell>
-                            <Badge variant={expense.expenseType === 'FIJO' ? 'outline' : 'secondary'}>
-                              {expense.expenseType === 'FIJO' ? 'Fijo' : 'Variable'}
-                            </Badge>
+                            <div className="flex flex-wrap gap-1">
+                              <Badge variant={expense.expenseType === 'FIJO' ? 'outline' : 'secondary'}>
+                                {expense.expenseType === 'FIJO' ? 'Fijo' : 'Variable'}
+                              </Badge>
+                              {expense.paidByAdmin && (
+                                expense.reimbursedByOwner ? (
+                                  <Badge variant="outline" className="bg-emerald-100 text-emerald-800 text-xs">
+                                    Reembolsado
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-amber-100 text-amber-800 text-xs">
+                                    Pendiente
+                                  </Badge>
+                                )
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="font-medium text-red-500">
                             -${expense.totalAmount.toLocaleString()}
@@ -713,6 +741,43 @@ export default function GastosPage() {
               />
               <Label htmlFor="includeItbms" className="font-normal">Incluir ITBMS (7%)</Label>
             </div>
+            
+            <Separator className="my-4" />
+            
+            {/* Sección de Gastos Administrados */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 space-y-3">
+              <h4 className="font-medium text-amber-800 dark:text-amber-200">Gestión Administrativa</h4>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="paidByAdmin"
+                  checked={formData.paidByAdmin}
+                  onChange={(e) => setFormData({...formData, paidByAdmin: e.target.checked, reimbursedByOwner: e.target.checked ? formData.reimbursedByOwner : false})}
+                  className="rounded border-gray-300"
+                />
+                <Label htmlFor="paidByAdmin" className="font-normal">Pagado por Administración (adelanto)</Label>
+              </div>
+              
+              {formData.paidByAdmin && (
+                <div className="flex items-center gap-2 pl-6">
+                  <input
+                    type="checkbox"
+                    id="reimbursedByOwner"
+                    checked={formData.reimbursedByOwner}
+                    onChange={(e) => setFormData({...formData, reimbursedByOwner: e.target.checked})}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="reimbursedByOwner" className="font-normal">Reembolsado por Propietario</Label>
+                </div>
+              )}
+              
+              {formData.paidByAdmin && !formData.reimbursedByOwner && formData.amount && (
+                <div className="text-sm text-amber-700 dark:text-amber-300 mt-2">
+                  <strong>Balance pendiente:</strong> ${(parseFloat(formData.amount || '0') * (formData.includeItbms ? 1.07 : 1)).toFixed(2)}
+                </div>
+              )}
+            </div>
+            
             {formData.amount && (
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm">
                 <strong>Total con ITBMS:</strong> ${(parseFloat(formData.amount || '0') * (formData.includeItbms ? 1.07 : 1)).toFixed(2)}
@@ -801,6 +866,37 @@ export default function GastosPage() {
                   <p className="text-sm text-muted-foreground">Número de Factura</p>
                   <p className="font-medium">{selectedExpense.invoiceNumber}</p>
                 </div>
+              )}
+              
+              {/* Sección de Gestión Administrativa */}
+              {selectedExpense.paidByAdmin && (
+                <>
+                  <Separator />
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 space-y-2">
+                    <h4 className="font-medium text-amber-800 dark:text-amber-200">Gestión Administrativa</h4>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                        Pagado por Administración
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedExpense.reimbursedByOwner ? (
+                        <Badge variant="outline" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                          Reembolsado por Propietario
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                          Pendiente de Reembolso
+                        </Badge>
+                      )}
+                    </div>
+                    {selectedExpense.reimbursedAt && (
+                      <p className="text-sm text-muted-foreground">
+                        Fecha de reembolso: {formatDate(selectedExpense.reimbursedAt)}
+                      </p>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -942,6 +1038,43 @@ export default function GastosPage() {
               />
               <Label htmlFor="edit-includeItbms" className="font-normal">Incluir ITBMS (7%)</Label>
             </div>
+            
+            <Separator className="my-4" />
+            
+            {/* Sección de Gastos Administrados */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 space-y-3">
+              <h4 className="font-medium text-amber-800 dark:text-amber-200">Gestión Administrativa</h4>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="edit-paidByAdmin"
+                  checked={editFormData.paidByAdmin}
+                  onChange={(e) => setEditFormData({...editFormData, paidByAdmin: e.target.checked, reimbursedByOwner: e.target.checked ? editFormData.reimbursedByOwner : false})}
+                  className="rounded border-gray-300"
+                />
+                <Label htmlFor="edit-paidByAdmin" className="font-normal">Pagado por Administración (adelanto)</Label>
+              </div>
+              
+              {editFormData.paidByAdmin && (
+                <div className="flex items-center gap-2 pl-6">
+                  <input
+                    type="checkbox"
+                    id="edit-reimbursedByOwner"
+                    checked={editFormData.reimbursedByOwner}
+                    onChange={(e) => setEditFormData({...editFormData, reimbursedByOwner: e.target.checked})}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="edit-reimbursedByOwner" className="font-normal">Reembolsado por Propietario</Label>
+                </div>
+              )}
+              
+              {editFormData.paidByAdmin && !editFormData.reimbursedByOwner && editFormData.amount && (
+                <div className="text-sm text-amber-700 dark:text-amber-300 mt-2">
+                  <strong>Balance pendiente:</strong> ${(parseFloat(editFormData.amount || '0') * (editFormData.includeItbms ? 1.07 : 1)).toFixed(2)}
+                </div>
+              )}
+            </div>
+            
             {editFormData.amount && (
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm">
                 <strong>Total con ITBMS:</strong> ${(parseFloat(editFormData.amount || '0') * (editFormData.includeItbms ? 1.07 : 1)).toFixed(2)}

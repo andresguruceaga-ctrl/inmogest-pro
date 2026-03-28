@@ -20,6 +20,8 @@ const createExpenseSchema = z.object({
   workEvidence: z.string().optional().nullable(),
   expenseDate: z.string(),
   propertyId: z.string().min(1, 'La propiedad es requerida'),
+  paidByAdmin: z.boolean().default(false),
+  reimbursedByOwner: z.boolean().default(false),
 });
 
 // GET - Listar gastos
@@ -95,6 +97,15 @@ export async function GET(request: NextRequest) {
     const totalITBMS = expenses.reduce((sum, expense) => sum + expense.itbmsAmount, 0);
     const totalBase = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
+    // Calcular balance de gastos administrados
+    const adminPaidExpenses = expenses.filter(e => e.paidByAdmin);
+    const pendingReimbursement = adminPaidExpenses
+      .filter(e => !e.reimbursedByOwner)
+      .reduce((sum, e) => sum + e.totalAmount, 0);
+    const totalReimbursed = adminPaidExpenses
+      .filter(e => e.reimbursedByOwner)
+      .reduce((sum, e) => sum + e.totalAmount, 0);
+
     // Agrupar por categoría
     const byCategory = expenses.reduce((acc, expense) => {
       const cat = expense.category;
@@ -137,6 +148,11 @@ export async function GET(request: NextRequest) {
         totalBase,
         byCategory,
         byType,
+        adminBalance: {
+          totalAdminPaid: adminPaidExpenses.reduce((sum, e) => sum + e.totalAmount, 0),
+          pendingReimbursement,
+          totalReimbursed,
+        },
       },
     });
   } catch (error) {
@@ -202,6 +218,9 @@ export async function POST(request: NextRequest) {
         workEvidence: validatedData.workEvidence ?? null,
         expenseDate: new Date(validatedData.expenseDate),
         propertyId: validatedData.propertyId,
+        paidByAdmin: validatedData.paidByAdmin,
+        reimbursedByOwner: validatedData.reimbursedByOwner,
+        reimbursedAt: validatedData.reimbursedByOwner ? new Date() : null,
       },
       include: {
         property: {

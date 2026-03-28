@@ -114,28 +114,33 @@ model Contract {
 }
 
 model Expense {
-  id            String          @id @default(cuid())
-  title         String
-  description   String?
-  category      ExpenseCategory
-  expenseType   ExpenseType     @default(VARIABLE)
-  amount        Float
-  itbmsAmount   Float
-  totalAmount   Float
-  invoiceNumber String?
-  invoiceDate   DateTime?
-  supplier      String?
-  invoiceImage  String?
-  workEvidence  String?
-  expenseDate   DateTime
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  propertyId    String
-  property      Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id                String          @id @default(cuid())
+  title             String
+  description       String?
+  category          ExpenseCategory
+  expenseType       ExpenseType     @default(VARIABLE)
+  amount            Float
+  itbmsAmount       Float
+  totalAmount       Float
+  invoiceNumber     String?
+  invoiceDate       DateTime?
+  supplier          String?
+  invoiceImage      String?
+  workEvidence      String?
+  expenseDate       DateTime
+  paidByAdmin       Boolean         @default(false)    // Si fue pagado por la administración (adelanto)
+  reimbursedByOwner Boolean         @default(false)    // Si el propietario ya reembolsó
+  reimbursedAt      DateTime?                          // Fecha cuando el propietario reembolsó
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  propertyId        String
+  property          Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([propertyId])
   @@index([category])
   @@index([expenseDate])
+  @@index([paidByAdmin])
+  @@index([reimbursedByOwner])
 }
 
 model SupportTicket {

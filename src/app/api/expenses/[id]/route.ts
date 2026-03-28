@@ -20,6 +20,8 @@ const updateExpenseSchema = z.object({
   workEvidence: z.string().optional().nullable(),
   expenseDate: z.string().optional(),
   propertyId: z.string().optional(),
+  paidByAdmin: z.boolean().optional(),
+  reimbursedByOwner: z.boolean().optional(),
 });
 
 // GET - Obtener un gasto por ID
@@ -171,6 +173,18 @@ export async function PUT(
     }
     if (validatedData.propertyId) {
       updateData.propertyId = validatedData.propertyId;
+    }
+    if (validatedData.paidByAdmin !== undefined) {
+      updateData.paidByAdmin = validatedData.paidByAdmin;
+    }
+    if (validatedData.reimbursedByOwner !== undefined) {
+      updateData.reimbursedByOwner = validatedData.reimbursedByOwner;
+      // Si se marca como reembolsado, registrar la fecha
+      if (validatedData.reimbursedByOwner && !existingExpense.reimbursedAt) {
+        updateData.reimbursedAt = new Date();
+      } else if (!validatedData.reimbursedByOwner) {
+        updateData.reimbursedAt = null;
+      }
     }
 
     // Actualizar el gasto
