@@ -1,0 +1,385 @@
+// InmoGest Pro - Schema para DESARROLLO LOCAL (SQLite)
+// Este archivo es para desarrollo local únicamente
+// Para producción, usa schema.prisma con PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USUARIOS Y ROLES ====================
+
+enum UserRole {
+  ADMIN
+  INQUILINO
+  PROPIETARIO
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password     String
+  name         String
+  phone        String?
+  role         UserRole @default(INQUILINO)
+  avatar       String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relaciones
+  propertiesAsOwner      Property[]         @relation("OwnerProperties")
+  propertiesAsAdmin      Property[]         @relation("AdminProperties")
+  propertiesAsTenant     Property[]         @relation("TenantProperties")
+  contractsAsOwner       Contract[]         @relation("OwnerContracts")
+  contractsAsTenant      Contract[]         @relation("TenantContracts")
+  supportTickets         SupportTicket[]
+  payments               Payment[]
+  notifications          Notification[]
+  documents              Document[]
+}
+
+// ==================== PROPIEDADES ====================
+
+enum PropertyStatus {
+  DISPONIBLE
+  OCUPADA
+  MANTENIMIENTO
+  INACTIVA
+}
+
+enum PropertyType {
+  APARTAMENTO
+  CASA
+  LOCAL_COMERCIAL
+  OFICINA
+  BODEGA
+  TERRENO
+  PH
+}
+
+model Property {
+  id                String         @id @default(cuid())
+  title             String
+  description       String?
+  propertyType      PropertyType   @default(APARTAMENTO)
+  
+  // Ubicación específica para Panamá
+  province          String
+  district          String
+  corregimiento     String?
+  neighborhood      String?
+  address           String
+  buildingName      String?
+  
+  // Características
+  totalArea         Float
+  builtArea         Float?
+  bedrooms          Int
+  bathrooms         Int
+  parkingSpaces     Int
+  floorNumber       Int?
+  
+  // Datos legales Panamá
+  fincaNumber       String
+  tomoNumber        String?
+  folioNumber       String?
+  asientoNumber     String?
+  
+  // ITBMS y precios
+  monthlyRent       Float
+  itbmsRate         Float          @default(7.0)
+  depositAmount     Float
+  
+  // Estado y administración
+  status            PropertyStatus @default(DISPONIBLE)
+  isActive          Boolean        @default(true)
+  
+  // Imágenes
+  mainImage         String?
+  images            String?
+  
+  // Fechas
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  
+  // Relaciones
+  ownerId           String
+  owner             User           @relation("OwnerProperties", fields: [ownerId], references: [id])
+  adminId           String
+  admin             User           @relation("AdminProperties", fields: [adminId], references: [id])
+  tenantId          String?
+  tenant            User?          @relation("TenantProperties", fields: [tenantId], references: [id])
+  
+  contracts         Contract[]
+  expenses          Expense[]
+  supportTickets    SupportTicket[]
+  documents         Document[]
+  financialReports  FinancialReport[]
+  payments          Payment[]
+}
+
+// ==================== CONTRATOS ====================
+
+enum ContractType {
+  ADMINISTRACION
+  ARRENDAMIENTO
+}
+
+enum ContractStatus {
+  VIGENTE
+  VENCIDO
+  CANCELADO
+  RENOVADO
+}
+
+model Contract {
+  id              String         @id @default(cuid())
+  contractType    ContractType
+  contractNumber  String         @unique
+  startDate       DateTime
+  endDate         DateTime
+  monthlyAmount   Float
+  itbmsAmount     Float
+  depositAmount   Float?
+  
+  terms           String?
+  documentUrl     String?
+  status          ContractStatus @default(VIGENTE)
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  propertyId      String
+  property        Property       @relation(fields: [propertyId], references: [id])
+  
+  ownerId         String
+  owner           User           @relation("OwnerContracts", fields: [ownerId], references: [id])
+  
+  tenantId        String?
+  tenant          User?          @relation("TenantContracts", fields: [tenantId], references: [id])
+  
+  payments        Payment[]
+}
+
+// ==================== GASTOS Y FACTURAS ====================
+
+enum ExpenseCategory {
+  MANTENIMIENTO_PH
+  SEGURO
+  SERVICIOS_BASICOS
+  REPARACION
+  SERVICIO_TECNICO
+  IMPUESTOS
+  COMISION_ADMIN
+  OTROS
+}
+
+enum ExpenseType {
+  FIJO
+  VARIABLE
+}
+
+model Expense {
+  id              String          @id @default(cuid())
+  title           String
+  description     String?
+  category        ExpenseCategory
+  expenseType     ExpenseType     @default(VARIABLE)
+  
+  amount          Float
+  itbmsAmount     Float
+  totalAmount     Float
+  
+  invoiceNumber   String?
+  invoiceDate     DateTime?
+  supplier        String?
+  
+  invoiceImage    String?
+  workEvidence    String?
+  
+  expenseDate     DateTime
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  propertyId      String
+  property        Property        @relation(fields: [propertyId], references: [id])
+}
+
+// ==================== SOPORTE Y TICKETS ====================
+
+enum TicketStatus {
+  ABIERTO
+  EN_PROCESO
+  RESUELTO
+  CERRADO
+}
+
+enum TicketPriority {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+model SupportTicket {
+  id              String         @id @default(cuid())
+  title           String
+  description     String
+  category        String?
+  
+  status          TicketStatus   @default(ABIERTO)
+  priority        TicketPriority @default(MEDIA)
+  
+  photos          String?
+  
+  response        String?
+  respondedAt     DateTime?
+  respondedBy     String?
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  resolvedAt      DateTime?
+  
+  propertyId      String
+  property        Property       @relation(fields: [propertyId], references: [id])
+  userId          String
+  user            User           @relation(fields: [userId], references: [id])
+}
+
+// ==================== PAGOS ====================
+
+enum PaymentStatus {
+  PENDIENTE
+  PAGADO
+  ATRASADO
+  PARCIAL
+  CANCELADO
+}
+
+enum PaymentType {
+  ALQUILER
+  DEPOSITO
+  MANTENIMIENTO
+  COMISION
+  OTROS
+}
+
+model Payment {
+  id              String         @id @default(cuid())
+  paymentType     PaymentType
+  amount          Float
+  itbmsAmount     Float
+  totalAmount     Float
+  
+  referenceNumber String?
+  paymentMethod   String?
+  
+  status          PaymentStatus  @default(PENDIENTE)
+  paidAt          DateTime?
+  dueDate         DateTime
+  
+  receiptImage    String?
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  propertyId      String
+  property        Property       @relation(fields: [propertyId], references: [id])
+  userId          String
+  user            User           @relation(fields: [userId], references: [id])
+  contractId      String?
+  contract        Contract?      @relation(fields: [contractId], references: [id])
+}
+
+// ==================== REPORTES FINANCIEROS ====================
+
+model FinancialReport {
+  id              String   @id @default(cuid())
+  month           Int
+  year            Int
+  
+  grossIncome     Float
+  fixedExpenses   Float
+  repairsExpenses Float
+  totalExpenses   Float
+  netIncome       Float
+  
+  itbmsCollected  Float
+  itbmsPaid       Float
+  
+  isGenerated     Boolean  @default(false)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  propertyId      String
+  property        Property @relation(fields: [propertyId], references: [id])
+
+  @@unique([propertyId, month, year])
+}
+
+// ==================== DOCUMENTOS ====================
+
+enum DocumentType {
+  CONTRATO_ADMINISTRACION
+  CONTRATO_ARRENDAMIENTO
+  FACTURA
+  RECIBO
+  ESCRITURA
+  INFORME
+  OTRO
+}
+
+model Document {
+  id              String       @id @default(cuid())
+  title           String
+  description     String?
+  documentType    DocumentType
+  
+  fileUrl         String
+  fileName        String
+  fileSize        Int?
+  mimeType        String?
+  
+  uploadedAt      DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  propertyId      String
+  property        Property     @relation(fields: [propertyId], references: [id])
+  uploadedBy      String
+  uploader        User         @relation(fields: [uploadedBy], references: [id])
+}
+
+// ==================== NOTIFICACIONES ====================
+
+model Notification {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  type        String
+  isRead      Boolean  @default(false)
+  link        String?
+  
+  createdAt   DateTime @default(now())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+// ==================== DASHBOARD STATS ====================
+
+model DashboardStats {
+  id                String   @id @default(cuid())
+  totalProperties   Int      @default(0)
+  activeContracts   Int      @default(0)
+  pendingPayments   Int      @default(0)
+  openTickets       Int      @default(0)
+  monthlyRevenue    Float    @default(0)
+  totalExpenses     Float    @default(0)
+  updatedAt         DateTime @updatedAt
+}

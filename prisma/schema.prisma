@@ -1,0 +1,353 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+}
+
+model User {
+  id                 String          @id @default(cuid())
+  email              String          @unique
+  password           String
+  name               String
+  phone              String?
+  role               UserRole        @default(INQUILINO)
+  avatar             String?
+  isActive           Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  contractsAsOwner   Contract[]      @relation("OwnerContracts")
+  contractsAsTenant  Contract[]      @relation("TenantContracts")
+  documents          Document[]
+  notifications      Notification[]
+  payments           Payment[]
+  propertiesAsAdmin  Property[]      @relation("AdminProperties")
+  propertiesAsOwner  Property[]      @relation("OwnerProperties")
+  propertiesAsTenant Property[]      @relation("TenantProperties")
+  supportTickets     SupportTicket[]
+}
+
+model Property {
+  id               String            @id @default(cuid())
+  title            String
+  description      String?
+  propertyType     PropertyType      @default(APARTAMENTO)
+  province         String
+  district         String
+  corregimiento    String?
+  neighborhood     String?
+  address          String
+  buildingName     String?
+  totalArea        Float
+  builtArea        Float?
+  bedrooms         Int
+  bathrooms        Int
+  parkingSpaces    Int
+  floorNumber      Int?
+  fincaNumber      String
+  tomoNumber       String?
+  folioNumber      String?
+  asientoNumber    String?
+  monthlyRent      Float
+  itbmsRate        Float             @default(7.0)
+  depositAmount    Float
+  status           PropertyStatus    @default(DISPONIBLE)
+  isActive         Boolean           @default(true)
+  mainImage        String?
+  images           String?
+  comments         String?
+  forSale          Boolean           @default(false)
+  salePrice        Float?
+  saleDescription  String?
+  forRent          Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  ownerId          String
+  adminId          String
+  tenantId         String?
+  contracts        Contract[]
+  documents        Document[]
+  expenses         Expense[]
+  financialReports FinancialReport[]
+  payments         Payment[]
+  admin            User              @relation("AdminProperties", fields: [adminId], references: [id], onDelete: Cascade)
+  owner            User              @relation("OwnerProperties", fields: [ownerId], references: [id], onDelete: Cascade)
+  tenant           User?             @relation("TenantProperties", fields: [tenantId], references: [id])
+  supportTickets   SupportTicket[]
+
+  @@index([ownerId])
+  @@index([adminId])
+  @@index([tenantId])
+  @@index([status])
+  @@index([province])
+}
+
+model Contract {
+  id             String         @id @default(cuid())
+  contractType   ContractType
+  contractNumber String         @unique
+  startDate      DateTime
+  endDate        DateTime
+  monthlyAmount  Float
+  itbmsAmount    Float
+  depositAmount  Float?
+  terms          String?
+  documentUrl    String?
+  status         ContractStatus @default(VIGENTE)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  propertyId     String
+  ownerId        String
+  tenantId       String?
+  owner          User           @relation("OwnerContracts", fields: [ownerId], references: [id], onDelete: Cascade)
+  property       Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  tenant         User?          @relation("TenantContracts", fields: [tenantId], references: [id])
+  payments       Payment[]
+
+  @@index([propertyId])
+  @@index([ownerId])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Expense {
+  id            String          @id @default(cuid())
+  title         String
+  description   String?
+  category      ExpenseCategory
+  expenseType   ExpenseType     @default(VARIABLE)
+  amount        Float
+  itbmsAmount   Float
+  totalAmount   Float
+  invoiceNumber String?
+  invoiceDate   DateTime?
+  supplier      String?
+  invoiceImage  String?
+  workEvidence  String?
+  expenseDate   DateTime
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  propertyId    String
+  property      Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([category])
+  @@index([expenseDate])
+}
+
+model SupportTicket {
+  id          String         @id @default(cuid())
+  title       String
+  description String
+  category    String?
+  status      TicketStatus   @default(ABIERTO)
+  priority    TicketPriority @default(MEDIA)
+  photos      String?
+  response    String?
+  respondedAt DateTime?
+  respondedBy String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  resolvedAt  DateTime?
+  propertyId  String
+  userId      String
+  property    Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  paymentType     PaymentType
+  amount          Float
+  itbmsAmount     Float
+  totalAmount     Float
+  referenceNumber String?
+  paymentMethod   String?
+  status          PaymentStatus @default(PENDIENTE)
+  paidAt          DateTime?
+  dueDate         DateTime
+  receiptImage    String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  propertyId      String
+  userId          String
+  contractId      String?
+  contract        Contract?     @relation(fields: [contractId], references: [id])
+  property        Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([userId])
+  @@index([contractId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model FinancialReport {
+  id              String   @id @default(cuid())
+  month           Int
+  year            Int
+  grossIncome     Float
+  fixedExpenses   Float
+  repairsExpenses Float
+  totalExpenses   Float
+  netIncome       Float
+  itbmsCollected  Float
+  itbmsPaid       Float
+  isGenerated     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  propertyId      String
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, month, year])
+  @@index([propertyId])
+  @@index([year, month])
+}
+
+model Document {
+  id           String       @id @default(cuid())
+  title        String
+  description  String?
+  documentType DocumentType
+  fileUrl      String
+  fileName     String
+  fileSize     Int?
+  mimeType     String?
+  uploadedAt   DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  propertyId   String
+  uploadedBy   String
+  property     Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  uploader     User         @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([uploadedBy])
+  @@index([documentType])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model DashboardStats {
+  id              String   @id @default(cuid())
+  totalProperties Int      @default(0)
+  activeContracts Int      @default(0)
+  pendingPayments Int      @default(0)
+  openTickets     Int      @default(0)
+  monthlyRevenue  Float    @default(0)
+  totalExpenses   Float    @default(0)
+  updatedAt       DateTime @updatedAt
+}
+
+enum UserRole {
+  ADMIN
+  INQUILINO
+  PROPIETARIO
+}
+
+enum PropertyStatus {
+  DISPONIBLE
+  OCUPADA
+  MANTENIMIENTO
+  INACTIVA
+}
+
+enum PropertyType {
+  APARTAMENTO
+  CASA
+  LOCAL_COMERCIAL
+  OFICINA
+  BODEGA
+  TERRENO
+  PH
+}
+
+enum ContractType {
+  ADMINISTRACION
+  ARRENDAMIENTO
+}
+
+enum ContractStatus {
+  VIGENTE
+  VENCIDO
+  CANCELADO
+  RENOVADO
+}
+
+enum ExpenseCategory {
+  MANTENIMIENTO_PH
+  SEGURO
+  SERVICIOS_BASICOS
+  REPARACION
+  SERVICIO_TECNICO
+  IMPUESTOS
+  COMISION_ADMIN
+  OTROS
+}
+
+enum ExpenseType {
+  FIJO
+  VARIABLE
+}
+
+enum TicketStatus {
+  ABIERTO
+  EN_PROCESO
+  RESUELTO
+  CERRADO
+}
+
+enum TicketPriority {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum PaymentStatus {
+  PENDIENTE
+  PAGADO
+  ATRASADO
+  PARCIAL
+  CANCELADO
+}
+
+enum PaymentType {
+  ALQUILER
+  DEPOSITO
+  MANTENIMIENTO
+  COMISION
+  OTROS
+}
+
+enum DocumentType {
+  CONTRATO_ADMINISTRACION
+  CONTRATO_ARRENDAMIENTO
+  FACTURA
+  RECIBO
+  ESCRITURA
+  INFORME
+  OTRO
+}
