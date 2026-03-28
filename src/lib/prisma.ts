@@ -1,18 +1,14 @@
 import { PrismaClient } from '@prisma/client'
 
-// Supabase PostgreSQL URL - hardcoded for Turbopack compatibility
-const DATABASE_URL = 'postgresql://postgres.megswukieallaguhmjbh:inmogest-pro@aws-1-eu-west-1.pooler.supabase.com:5432/postgres'
-
 // Global for Prisma Client in development
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-// Create PrismaClient with explicit datasource URL for Turbopack compatibility
+// Create PrismaClient using environment variables (Neon PostgreSQL)
 function createPrismaClient() {
   return new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-    datasourceUrl: DATABASE_URL,
   })
 }
 

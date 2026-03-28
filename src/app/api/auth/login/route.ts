@@ -1,19 +1,9 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { compare } from 'bcryptjs';
 
-// Create PrismaClient with explicit URL for Turbopack compatibility
-const getPrismaClient = () => {
-  return new PrismaClient({
-    datasourceUrl: 'postgresql://postgres.megswukieallaguhmjbh:inmogest-pro@aws-1-eu-west-1.pooler.supabase.com:5432/postgres'
-  });
-};
-
 export async function POST(request: Request) {
-  let prisma;
-
   try {
-    prisma = getPrismaClient();
     const { email, password } = await request.json();
 
     // Validaciones

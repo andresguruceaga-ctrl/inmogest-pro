@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-
-// Create PrismaClient with explicit URL for Turbopack compatibility
-const getPrismaClient = () => {
-  return new PrismaClient({
-    datasourceUrl: 'postgresql://postgres.megswukieallaguhmjbh:inmogest-pro@aws-1-eu-west-1.pooler.supabase.com:5432/postgres'
-  });
-};
 
 // Esquema de validación simplificado - coincide con el formulario del frontend
 const createPropertySchema = z.object({
@@ -46,10 +39,7 @@ const createPropertySchema = z.object({
 
 // GET - Listar propiedades
 export async function GET(request: NextRequest) {
-  let prisma;
-  
   try {
-    prisma = getPrismaClient();
     const { searchParams } = new URL(request.url);
     const role = searchParams.get('role');
     const userId = searchParams.get('userId');
@@ -162,10 +152,7 @@ export async function GET(request: NextRequest) {
 
 // POST - Crear propiedad
 export async function POST(request: NextRequest) {
-  let prisma;
-
   try {
-    prisma = getPrismaClient();
     const body = await request.json();
     
     console.log('Received property data:', JSON.stringify(body, null, 2));
