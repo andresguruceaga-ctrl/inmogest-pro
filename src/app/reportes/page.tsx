@@ -99,6 +99,16 @@ interface ReportData {
     }
   }
   generated: boolean
+  tickets?: Array<{
+    id: string
+    title: string
+    description: string
+    category: string | null
+    status: string
+    priority: string
+    createdAt: string
+    property: { id: string; title: string; address: string }
+  }>
 }
 
 const months = [
@@ -376,6 +386,7 @@ export default function ReportesPage() {
         totals: reportData.totals,
         properties: reportData.properties,
         monthlyData: reportData.monthlyData,
+        tickets: reportData.tickets,
       },
     })
 

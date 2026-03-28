@@ -269,10 +269,6 @@ export function InquilinoDashboard({ userId: propUserId }: InquilinoDashboardPro
               <FileText className="h-4 w-4 mr-2" />
               Ver Contrato
             </Button>
-            <Button size="sm">
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Nuevo Ticket
-            </Button>
           </div>
         )}
       </div>
@@ -545,20 +541,12 @@ export function InquilinoDashboard({ userId: propUserId }: InquilinoDashboardPro
           {/* Support tickets */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Wrench className="h-5 w-5 text-primary" />
-                    Solicitudes de Soporte
-                  </CardTitle>
-                  <CardDescription>Estado de los tickets de mantenimiento</CardDescription>
-                </div>
-                {!isAdmin && (
-                  <Button size="sm">
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Nuevo Ticket
-                  </Button>
-                )}
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Wrench className="h-5 w-5 text-primary" />
+                  Solicitudes de Soporte
+                </CardTitle>
+                <CardDescription>Estado de los tickets de mantenimiento</CardDescription>
               </div>
             </CardHeader>
             <CardContent>

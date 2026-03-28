@@ -266,7 +266,7 @@ async function generateMonthlyReport(
       : 0,
   };
 
-  // Fetch owner tickets if ownerId is provided
+  // Fetch tickets for the selected property/properties
   let tickets: Array<{
     id: string;
     title: string;
@@ -279,18 +279,18 @@ async function generateMonthlyReport(
     property: { id: string; title: string; address: string };
   }> = [];
   
-  if (ownerId) {
-    const propertyIds = properties.map(p => p.id);
+  // Get tickets for all properties in the report
+  const propertyIds = properties.map(p => p.id);
+  if (propertyIds.length > 0) {
     tickets = await db.supportTicket.findMany({
       where: { 
-        userId: ownerId,
         propertyId: { in: propertyIds }
       },
       include: {
         property: { select: { id: true, title: true, address: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: 10,
+      take: 20,
     });
   }
 
@@ -776,7 +776,7 @@ async function generateYearlyReport(
       : 0,
   };
 
-  // Fetch owner tickets if ownerId is provided
+  // Fetch tickets for the selected property/properties
   let tickets: Array<{
     id: string;
     title: string;
@@ -789,18 +789,18 @@ async function generateYearlyReport(
     property: { id: string; title: string; address: string };
   }> = [];
   
-  if (propertyFilter.ownerId) {
-    const propertyIds = propertiesReport.map(p => p.propertyId);
+  // Get tickets for all properties in the report
+  const propertyIds = propertiesReport.map(p => p.propertyId);
+  if (propertyIds.length > 0) {
     tickets = await db.supportTicket.findMany({
       where: { 
-        userId: propertyFilter.ownerId as string,
         propertyId: { in: propertyIds }
       },
       include: {
         property: { select: { id: true, title: true, address: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: 10,
+      take: 20,
     });
   }
 

@@ -60,6 +60,16 @@ interface ReportPDFData {
       totalExpenses: number
       netIncome: number
     }>
+    tickets?: Array<{
+      id: string
+      title: string
+      description: string
+      category: string | null
+      status: string
+      priority: string
+      createdAt: string
+      property: { id: string; title: string; address: string }
+    }>
   }
 }
 
@@ -421,85 +431,6 @@ export function generateReportPDF(report: ReportPDFData): jsPDF {
     y += boxHeight + 10
   }
 
-  // Expense Distribution - Horizontal Bar Chart (more reliable than pie)
-  if (report.data.totals.totalExpenses > 0) {
-    // Check if we need a new page
-    if (y > pageHeight - 80) {
-      doc.addPage()
-      y = 20
-    }
-
-    doc.setFontSize(14)
-    doc.setTextColor(40, 40, 40)
-    doc.text('Distribución de Gastos', 14, y)
-    y += 10
-
-    const total = report.data.totals.totalExpenses
-    const fixedRatio = report.data.totals.fixedExpenses / total
-    const variableRatio = report.data.totals.variableExpenses / total
-
-    const barChartWidth = pageWidth - 60  // Leave margins
-    const barHeight = 25
-    const barY = y
-
-    // Draw background bar
-    doc.setFillColor(240, 240, 240)
-    doc.roundedRect(30, barY, barChartWidth, barHeight, 3, 3, 'F')
-
-    // Draw fixed expenses portion (orange)
-    const fixedWidth = barChartWidth * fixedRatio
-    if (fixedRatio > 0) {
-      doc.setFillColor(249, 115, 22)
-      doc.roundedRect(30, barY, fixedWidth, barHeight, 3, 3, 'F')
-    }
-
-    // Draw variable expenses portion (red) - overlay on right side
-    if (variableRatio > 0) {
-      doc.setFillColor(220, 38, 38)
-      const variableStartX = 30 + barChartWidth * (1 - variableRatio)
-      doc.roundedRect(variableStartX, barY, barChartWidth * variableRatio, barHeight, 3, 3, 'F')
-    }
-
-    // Labels inside the bars
-    doc.setFontSize(9)
-    doc.setTextColor(255, 255, 255)
-    
-    // Fixed label (center of fixed portion)
-    if (fixedWidth > 40) {
-      const fixedLabel = `Gastos Fijos: ${(fixedRatio * 100).toFixed(0)}%`
-      const fixedLabelWidth = doc.getTextWidth(fixedLabel)
-      doc.text(fixedLabel, 30 + fixedWidth / 2 - fixedLabelWidth / 2, barY + barHeight / 2 + 3)
-    }
-
-    // Variable label (center of variable portion)
-    if (variableRatio > 0.1) {
-      const variableLabel = `Variables: ${(variableRatio * 100).toFixed(0)}%`
-      const variableLabelWidth = doc.getTextWidth(variableLabel)
-      const variableStartX = 30 + barChartWidth * (1 - variableRatio / 2)
-      doc.text(variableLabel, variableStartX - variableLabelWidth / 2, barY + barHeight / 2 + 3)
-    }
-
-    y += barHeight + 10
-
-    // Legend with amounts below
-    doc.setFontSize(9)
-    doc.setTextColor(40, 40, 40)
-    
-    const fixedText = `Gastos Fijos: ${formatCurrency(report.data.totals.fixedExpenses)} (${(fixedRatio * 100).toFixed(1)}%)`
-    const variableText = `Gastos Variables: ${formatCurrency(report.data.totals.variableExpenses)} (${(variableRatio * 100).toFixed(1)}%)`
-    
-    doc.setFillColor(249, 115, 22)
-    doc.rect(30, y, 8, 8, 'F')
-    doc.setTextColor(40, 40, 40)
-    doc.text(fixedText, 42, y + 6)
-
-    doc.setFillColor(220, 38, 38)
-    doc.rect(30 + barChartWidth / 2, y, 8, 8, 'F')
-    doc.text(variableText, 42 + barChartWidth / 2, y + 6)
-
-    y += 25
-  }
-
   // Properties Financial Breakdown
   if (properties.length > 1) {
     // Check if we need a new page
@@ -543,42 +474,65 @@ export function generateReportPDF(report: ReportPDFData): jsPDF {
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY + 15 || 150
     
     // Check if we need a new page
-    if (y > pageHeight - 100) {
+    if (y > pageHeight - 120) {
       doc.addPage()
       y = 20
     }
 
     doc.setFontSize(14)
     doc.setTextColor(40, 40, 40)
-    doc.text('Evolución Mensual', 14, y)
+    doc.text('Evaluación Mensual', 14, y)
     y += 4
 
-    // Draw bar chart
+    // Draw improved bar chart with values
     const chartX = 14
     const chartWidth = pageWidth - 28
-    const chartHeight = 60
-    const barWidth = chartWidth / 12 - 2
+    const chartHeight = 80
+    const barWidth = chartWidth / 12 - 4
 
     // Find max value for scaling
     const maxValue = Math.max(...report.data.monthlyData.map(d => Math.max(d.grossIncome, d.totalExpenses)))
 
     // Draw chart background
-    doc.setFillColor(245, 245, 245)
+    doc.setFillColor(250, 250, 250)
     doc.roundedRect(chartX, y, chartWidth, chartHeight, 2, 2, 'F')
+    
+    // Draw grid lines
+    doc.setDrawColor(230, 230, 230)
+    doc.setLineWidth(0.3)
+    for (let i = 0; i <= 4; i++) {
+      const gridY = y + 10 + (chartHeight - 20) * (i / 4)
+      doc.line(chartX + 5, gridY, chartX + chartWidth - 5, gridY)
+    }
 
-    // Draw bars
+    // Draw bars with values
     report.data.monthlyData.forEach((data, index) => {
-      const barX = chartX + index * (chartWidth / 12) + 1
-      const incomeHeight = maxValue > 0 ? (data.grossIncome / maxValue) * (chartHeight - 10) : 0
-      const expenseHeight = maxValue > 0 ? (data.totalExpenses / maxValue) * (chartHeight - 10) : 0
+      const barX = chartX + 5 + index * (chartWidth / 12)
+      const incomeHeight = maxValue > 0 ? (data.grossIncome / maxValue) * (chartHeight - 25) : 0
+      const expenseHeight = maxValue > 0 ? (data.totalExpenses / maxValue) * (chartHeight - 25) : 0
 
       // Income bar (green)
       doc.setFillColor(34, 197, 94)
-      doc.rect(barX, y + chartHeight - incomeHeight - 5, barWidth / 2 - 1, incomeHeight, 'F')
+      doc.rect(barX, y + chartHeight - incomeHeight - 15, barWidth / 2 - 1, incomeHeight, 'F')
 
       // Expense bar (red)
       doc.setFillColor(239, 68, 68)
-      doc.rect(barX + barWidth / 2, y + chartHeight - expenseHeight - 5, barWidth / 2 - 1, expenseHeight, 'F')
+      doc.rect(barX + barWidth / 2, y + chartHeight - expenseHeight - 15, barWidth / 2 - 1, expenseHeight, 'F')
+      
+      // Month label
+      doc.setFontSize(7)
+      doc.setTextColor(100, 100, 100)
+      const monthLabel = data.monthName.slice(0, 3)
+      const labelWidth = doc.getTextWidth(monthLabel)
+      doc.text(monthLabel, barX + barWidth / 2 - labelWidth / 2, y + chartHeight - 3)
+      
+      // Show values on top of bars if they're significant
+      if (data.grossIncome > 0) {
+        doc.setFontSize(6)
+        doc.setTextColor(34, 197, 94)
+        const incomeText = formatCurrency(data.grossIncome)
+        doc.text(incomeText, barX, y + chartHeight - incomeHeight - 17, { maxWidth: barWidth / 2 })
+      }
     })
 
     // Legend
@@ -594,7 +548,7 @@ export function generateReportPDF(report: ReportPDFData): jsPDF {
 
     y += chartHeight + 20
 
-    // Monthly data table
+    // Monthly data table with values
     const monthlyDataRows = report.data.monthlyData.map(m => [
       m.monthName.slice(0, 3),
       formatCurrency(m.grossIncome),
@@ -755,6 +709,60 @@ export function generateReportPDF(report: ReportPDFData): jsPDF {
         1: { cellWidth: 40 },
         2: { cellWidth: 35, halign: 'right' },
         3: { cellWidth: 30, halign: 'center' },
+      },
+    })
+  }
+
+  // Tickets Section
+  if (report.data.tickets && report.data.tickets.length > 0) {
+    // Check if we need a new page
+    if (y > pageHeight - 80) {
+      doc.addPage()
+      y = 20
+    }
+
+    doc.setFontSize(14)
+    doc.setTextColor(40, 40, 40)
+    doc.text('Tickets de Soporte', 14, y)
+    y += 4
+
+    const statusLabels: Record<string, string> = {
+      ABIERTO: 'Abierto',
+      EN_PROCESO: 'En Proceso',
+      RESUELTO: 'Resuelto',
+      CERRADO: 'Cerrado',
+    }
+
+    const priorityLabels: Record<string, string> = {
+      BAJA: 'Baja',
+      MEDIA: 'Media',
+      ALTA: 'Alta',
+      URGENTE: 'Urgente',
+    }
+
+    const ticketsData = report.data.tickets.map(t => [
+      t.property.title,
+      t.title,
+      t.description.substring(0, 50) + (t.description.length > 50 ? '...' : ''),
+      statusLabels[t.status] || t.status,
+      priorityLabels[t.priority] || t.priority,
+      t.createdAt,
+    ])
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Propiedad', 'Título', 'Descripción', 'Estado', 'Prioridad', 'Fecha']],
+      body: ticketsData,
+      theme: 'striped',
+      headStyles: { fillColor: [139, 92, 246] },
+      styles: { fontSize: 7 },
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 35 },
+        2: { cellWidth: 50 },
+        3: { cellWidth: 25 },
+        4: { cellWidth: 20 },
+        5: { cellWidth: 25 },
       },
     })
   }
