@@ -2,14 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { z } from 'zod';
 
-// ITBMS rate for Panama (7%)
-const ITBMS_RATE = 7.0;
-
 // Esquema de validación para crear pago
 const createPaymentSchema = z.object({
   paymentType: z.enum(['ALQUILER', 'DEPOSITO', 'MANTENIMIENTO', 'COMISION', 'OTROS']),
   amount: z.number().positive('El monto debe ser positivo'),
-  includeItbms: z.boolean().default(false),
   referenceNumber: z.string().optional().nullable(),
   paymentMethod: z.enum(['TRANSFERENCIA', 'EFECTIVO', 'CHEQUE', 'TARJETA']).optional(),
   status: z.enum(['PENDIENTE', 'PAGADO', 'ATRASADO', 'PARCIAL', 'CANCELADO']).default('PENDIENTE'),
@@ -113,8 +109,6 @@ export async function GET(request: NextRequest) {
 
     // Calcular estadísticas
     const totalAmount = payments.reduce((sum, p) => sum + p.totalAmount, 0);
-    const totalITBMS = payments.reduce((sum, p) => sum + p.itbmsAmount, 0);
-    const totalBase = payments.reduce((sum, p) => sum + p.amount, 0);
 
     const byStatus = {
       pendiente: {
@@ -171,8 +165,6 @@ export async function GET(request: NextRequest) {
       count: payments.length,
       summary: {
         totalAmount,
-        totalITBMS,
-        totalBase,
         byStatus,
         byType,
         overdueCount: overduePayments.length,
@@ -247,19 +239,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Calcular ITBMS y total
-    const itbmsAmount = validatedData.includeItbms
-      ? validatedData.amount * (ITBMS_RATE / 100)
-      : 0;
-    const totalAmount = validatedData.amount + itbmsAmount;
-
-    // Crear el pago
+    // Crear el pago (sin ITBMS, totalAmount = amount)
     const payment = await db.payment.create({
       data: {
         paymentType: validatedData.paymentType,
         amount: validatedData.amount,
-        itbmsAmount: itbmsAmount,
-        totalAmount: totalAmount,
+        itbmsAmount: 0,
+        totalAmount: validatedData.amount,
         referenceNumber: validatedData.referenceNumber,
         paymentMethod: validatedData.paymentMethod,
         status: validatedData.status,
@@ -300,7 +286,7 @@ export async function POST(request: NextRequest) {
       await db.notification.create({
         data: {
           title: 'Pago registrado',
-          message: `Se ha registrado un pago de $${totalAmount.toFixed(2)} para ${property.title}`,
+          message: `Se ha registrado un pago de $${validatedData.amount.toFixed(2)} para ${property.title}`,
           type: 'PAYMENT_RECEIVED',
           userId: property.adminId,
           link: `/payments/${payment.id}`,
