@@ -113,7 +113,7 @@ export default function SoportePage() {
       const response = await fetch('/api/tickets')
       if (response.ok) {
         const data = await response.json()
-        setTickets(data.tickets || [])
+        setTickets(data.data || data.tickets || [])
       }
     } catch (error) {
       console.error('Error fetching tickets:', error)
@@ -146,6 +146,19 @@ export default function SoportePage() {
       return
     }
 
+    // Get userId from session/localStorage
+    const userStr = localStorage.getItem('user')
+    const user = userStr ? JSON.parse(userStr) : null
+    
+    if (!user?.id) {
+      toast({
+        title: 'Error',
+        description: 'Debes iniciar sesión para crear un ticket',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setSaving(true)
     try {
       const response = await fetch('/api/tickets', {
@@ -157,6 +170,7 @@ export default function SoportePage() {
           category: formData.category || null,
           priority: formData.priority,
           propertyId: formData.propertyId,
+          userId: user.id,
         }),
       })
 
@@ -198,6 +212,9 @@ export default function SoportePage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          category: formData.category || null,
           status: formData.status,
           priority: formData.priority,
           response: formData.response || null,
@@ -546,10 +563,27 @@ export default function SoportePage() {
           <DialogHeader>
             <DialogTitle>Editar Ticket</DialogTitle>
             <DialogDescription>
-              Actualiza el estado y la respuesta del ticket
+              Actualiza el estado, prioridad y otros campos del ticket
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUpdateTicket} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Título</Label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Título del ticket"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Descripción</Label>
+              <Textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Descripción del problema"
+                rows={3}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Estado</Label>
@@ -572,11 +606,24 @@ export default function SoportePage() {
                   </SelectTrigger>
                   <SelectContent>
                     {priorityOptions.map((p) => (
-                      <SelectItem key={p.value} value={p.label}>{p.label}</SelectItem>
+                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Categoría</Label>
+              <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categoryOptions.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Respuesta</Label>
