@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { 
   Download, TrendingUp, TrendingDown, DollarSign, Receipt, BarChart3, 
   Building2, Calendar, ChevronDown, ChevronUp, Loader2, FileText,
-  ArrowUpRight, ArrowDownRight, Eye, AlertCircle, ChevronRight, Sparkles
+  ArrowUpRight, ArrowDownRight, Eye, AlertCircle, ChevronRight, Sparkles,
+  HelpCircle, Clock, CheckCircle, AlertTriangle
 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
@@ -138,6 +139,20 @@ const categoryLabels: Record<string, string> = {
   IMPUESTOS: 'Impuestos',
   COMISION_ADMIN: 'Comisión Admin',
   OTROS: 'Otros',
+}
+
+const ticketStatusConfig: Record<string, { label: string; color: string }> = {
+  ABIERTO: { label: 'Abierto', color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
+  EN_PROCESO: { label: 'En Proceso', color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' },
+  RESUELTO: { label: 'Resuelto', color: 'bg-green-500/10 text-green-500 border-green-500/20' },
+  CERRADO: { label: 'Cerrado', color: 'bg-gray-500/10 text-gray-500 border-gray-500/20' },
+}
+
+const ticketPriorityConfig: Record<string, { label: string; color: string }> = {
+  BAJA: { label: 'Baja', color: 'bg-gray-500' },
+  MEDIA: { label: 'Media', color: 'bg-yellow-500' },
+  ALTA: { label: 'Alta', color: 'bg-orange-500' },
+  URGENTE: { label: 'Urgente', color: 'bg-red-500' },
 }
 
 export default function ReportesPage() {
@@ -425,6 +440,21 @@ export default function ReportesPage() {
 
   const isAdmin = user?.role === 'admin'
   const allExpenses = getAllExpenses()
+
+  // Ticket stats
+  const getTicketStats = () => {
+    if (!reportData?.tickets) return { total: 0, open: 0, resolved: 0, urgent: 0 }
+    
+    const tickets = reportData.tickets
+    return {
+      total: tickets.length,
+      open: tickets.filter(t => t.status === 'ABIERTO' || t.status === 'EN_PROCESO').length,
+      resolved: tickets.filter(t => t.status === 'RESUELTO' || t.status === 'CERRADO').length,
+      urgent: tickets.filter(t => t.priority === 'URGENTE' || t.priority === 'ALTA').length,
+    }
+  }
+
+  const ticketStats = getTicketStats()
 
   return (
     <SidebarProvider>
@@ -794,6 +824,101 @@ export default function ReportesPage() {
                             <span>Gastos</span>
                           </div>
                         </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Tickets Section */}
+                {reportData.tickets && reportData.tickets.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <HelpCircle className="h-5 w-5" />
+                        Tickets de Soporte
+                      </CardTitle>
+                      <CardDescription>
+                        {ticketStats.total} tickets registrados • {ticketStats.open} abiertos • {ticketStats.resolved} resueltos
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {/* Ticket Stats */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <div className="flex items-center gap-2">
+                            <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">Total</span>
+                          </div>
+                          <p className="text-2xl font-bold mt-1">{ticketStats.total}</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-blue-500" />
+                            <span className="text-sm text-muted-foreground">Abiertos</span>
+                          </div>
+                          <p className="text-2xl font-bold mt-1 text-blue-500">{ticketStats.open}</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-green-500/5 border border-green-500/10">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm text-muted-foreground">Resueltos</span>
+                          </div>
+                          <p className="text-2xl font-bold mt-1 text-green-500">{ticketStats.resolved}</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/10">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-red-500" />
+                            <span className="text-sm text-muted-foreground">Urgentes</span>
+                          </div>
+                          <p className="text-2xl font-bold mt-1 text-red-500">{ticketStats.urgent}</p>
+                        </div>
+                      </div>
+
+                      {/* Tickets Table */}
+                      <div className="rounded-lg border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Propiedad</TableHead>
+                              <TableHead>Título</TableHead>
+                              <TableHead className="hidden md:table-cell">Descripción</TableHead>
+                              <TableHead>Estado</TableHead>
+                              <TableHead>Prioridad</TableHead>
+                              <TableHead className="hidden lg:table-cell">Fecha</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {reportData.tickets.map((ticket) => (
+                              <TableRow key={ticket.id}>
+                                <TableCell className="font-medium">
+                                  <div>
+                                    <p>{ticket.property.title}</p>
+                                    <p className="text-xs text-muted-foreground">{ticket.property.address}</p>
+                                  </div>
+                                </TableCell>
+                                <TableCell>{ticket.title}</TableCell>
+                                <TableCell className="hidden md:table-cell">
+                                  <p className="text-sm text-muted-foreground truncate max-w-[200px]">
+                                    {ticket.description}
+                                  </p>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge className={ticketStatusConfig[ticket.status]?.color || 'bg-gray-500/10 text-gray-500'}>
+                                    {ticketStatusConfig[ticket.status]?.label || ticket.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge className={`${ticketPriorityConfig[ticket.priority]?.color || 'bg-gray-500'} text-white`}>
+                                    {ticketPriorityConfig[ticket.priority]?.label || ticket.priority}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="hidden lg:table-cell text-muted-foreground">
+                                  {new Date(ticket.createdAt).toLocaleDateString('es-PA')}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
                       </div>
                     </CardContent>
                   </Card>
