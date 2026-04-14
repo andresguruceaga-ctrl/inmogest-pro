@@ -46,21 +46,22 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'inquilinos', label: 'Inquilinos', href: '/inquilinos', icon: 'Users', roles: ['admin'] },
   { id: 'propietarios', label: 'Propietarios', href: '/propietarios', icon: 'UserCheck', roles: ['admin'] },
   { id: 'reportes', label: 'Reportes', href: '/reportes', icon: 'BarChart3', roles: ['admin'] },
+  { id: 'soporte', label: 'Soporte', href: '/soporte', icon: 'HelpCircle', roles: ['admin'] },
   
   // Inquilino navigation - Limited to own data only
   { id: 'dashboard-inquilino', label: 'Dashboard', href: '/', icon: 'LayoutDashboard', roles: ['inquilino'] },
   { id: 'mi-propiedad', label: 'Mi Propiedad', href: '/mi-propiedad', icon: 'Home', roles: ['inquilino'] },
   { id: 'mi-contrato', label: 'Mi Contrato', href: '/mi-contrato', icon: 'FileText', roles: ['inquilino'] },
   { id: 'pagos', label: 'Pagos', href: '/pagos', icon: 'CreditCard', roles: ['inquilino'] },
-  { id: 'soporte-inquilino', label: 'Soporte', href: '/soporte', icon: 'HelpCircle', roles: ['inquilino'] },
-  { id: 'perfil-inquilino', label: 'Perfil', href: '/perfil', icon: 'User', roles: ['inquilino'] },
+  { id: 'soporte', label: 'Soporte', href: '/soporte', icon: 'HelpCircle', roles: ['inquilino'] },
+  { id: 'perfil', label: 'Perfil', href: '/perfil', icon: 'User', roles: ['inquilino'] },
   
   // Propietario navigation - Limited to own data only
   { id: 'dashboard-propietario', label: 'Dashboard', href: '/', icon: 'LayoutDashboard', roles: ['propietario'] },
   { id: 'mis-propiedades', label: 'Mis Propiedades', href: '/mis-propiedades', icon: 'Building2', roles: ['propietario'] },
   { id: 'contratos-propietario', label: 'Contratos', href: '/contratos', icon: 'FileText', roles: ['propietario'] },
-  { id: 'soporte-propietario', label: 'Soporte', href: '/soporte', icon: 'HelpCircle', roles: ['propietario'] },
-  { id: 'perfil-propietario', label: 'Perfil', href: '/perfil', icon: 'User', roles: ['propietario'] },
+  { id: 'soporte', label: 'Soporte', href: '/soporte', icon: 'HelpCircle', roles: ['propietario'] },
+  { id: 'perfil', label: 'Perfil', href: '/perfil', icon: 'User', roles: ['propietario'] },
 ]
 
 // Demo notifications
