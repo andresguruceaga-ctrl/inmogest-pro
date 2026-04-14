@@ -26,7 +26,6 @@ interface Expense {
   category: string
   expenseType: string
   amount: number
-  itbmsAmount: number
   totalAmount: number
   invoiceNumber: string | null
   supplier: string | null
@@ -75,7 +74,6 @@ export default function GastosPage() {
   const [saving, setSaving] = useState(false)
   const [summary, setSummary] = useState({
     totalExpenses: 0,
-    totalITBMS: 0,
     byType: { FIJO: { count: 0, total: 0 }, VARIABLE: { count: 0, total: 0 } }
   })
   const { toast } = useToast()
@@ -97,7 +95,6 @@ export default function GastosPage() {
     supplier: '',
     expenseDate: '',
     propertyId: '',
-    includeItbms: true,
     paidByAdmin: false,
     reimbursedByOwner: false,
   })
@@ -117,7 +114,6 @@ export default function GastosPage() {
     supplier: '',
     expenseDate: '',
     propertyId: '',
-    includeItbms: true,
     paidByAdmin: false,
     reimbursedByOwner: false,
   })
@@ -182,7 +178,6 @@ export default function GastosPage() {
           category: formData.category,
           expenseType: formData.expenseType,
           amount: parseFloat(formData.amount),
-          includeItbms: formData.includeItbms,
           invoiceNumber: formData.invoiceNumber || null,
           supplier: formData.supplier || null,
           expenseDate: formData.expenseDate,
@@ -283,7 +278,6 @@ export default function GastosPage() {
           category: editFormData.category,
           expenseType: editFormData.expenseType,
           amount: parsedAmount,
-          includeItbms: editFormData.includeItbms,
           invoiceNumber: editFormData.invoiceNumber?.trim() || null,
           supplier: editFormData.supplier?.trim() || null,
           expenseDate: editFormData.expenseDate,
@@ -419,7 +413,6 @@ export default function GastosPage() {
       supplier: expense.supplier || '',
       expenseDate: expenseDateStr,
       propertyId: propertyId,
-      includeItbms: Number(expense.itbmsAmount ?? 0) > 0,
       paidByAdmin: expense.paidByAdmin || false,
       reimbursedByOwner: expense.reimbursedByOwner || false,
     })
@@ -442,7 +435,6 @@ export default function GastosPage() {
       supplier: '',
       expenseDate: '',
       propertyId: '',
-      includeItbms: true,
       paidByAdmin: false,
       reimbursedByOwner: false,
     })
@@ -464,7 +456,7 @@ export default function GastosPage() {
   const summaryCards = [
     { label: 'Gastos Fijos', value: summary.byType.FIJO.total, trend: 'up' },
     { label: 'Gastos Variables', value: summary.byType.VARIABLE.total, trend: 'down' },
-    { label: 'ITBMS Pagado', value: summary.totalITBMS, trend: 'neutral' },
+    { label: 'Cantidad de Gastos', value: expenses.length, trend: 'neutral', isCount: true },
     { label: 'Total', value: summary.totalExpenses, trend: 'up' },
   ]
 
@@ -493,7 +485,9 @@ export default function GastosPage() {
                   <CardContent className="pt-6">
                     <p className="text-sm text-muted-foreground">{item.label}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-2xl font-bold">${item.value.toLocaleString()}</span>
+                      <span className="text-2xl font-bold">
+                        {item.isCount ? item.value : `$${item.value.toLocaleString()}`}
+                      </span>
                       {item.trend === 'up' && <ArrowUpRight className="h-4 w-4 text-red-500" />}
                       {item.trend === 'down' && <ArrowDownRight className="h-4 w-4 text-emerald-500" />}
                     </div>
@@ -731,16 +725,6 @@ export default function GastosPage() {
                 placeholder="Detalles adicionales del gasto..."
               />
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="includeItbms"
-                checked={formData.includeItbms}
-                onChange={(e) => setFormData({...formData, includeItbms: e.target.checked})}
-                className="rounded border-gray-300"
-              />
-              <Label htmlFor="includeItbms" className="font-normal">Incluir ITBMS (7%)</Label>
-            </div>
             
             <Separator className="my-4" />
             
@@ -773,14 +757,14 @@ export default function GastosPage() {
               
               {formData.paidByAdmin && !formData.reimbursedByOwner && formData.amount && (
                 <div className="text-sm text-amber-700 dark:text-amber-300 mt-2">
-                  <strong>Balance pendiente:</strong> ${(parseFloat(formData.amount || '0') * (formData.includeItbms ? 1.07 : 1)).toFixed(2)}
+                  <strong>Balance pendiente:</strong> ${parseFloat(formData.amount || '0').toFixed(2)}
                 </div>
               )}
             </div>
             
             {formData.amount && (
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm">
-                <strong>Total con ITBMS:</strong> ${(parseFloat(formData.amount || '0') * (formData.includeItbms ? 1.07 : 1)).toFixed(2)}
+                <strong>Total del gasto:</strong> ${parseFloat(formData.amount || '0').toFixed(2)}
               </div>
             )}
             <DialogFooter>
@@ -835,20 +819,9 @@ export default function GastosPage() {
               
               <Separator />
               
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Monto base:</span>
-                  <span className="font-medium">${selectedExpense.amount.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">ITBMS:</span>
-                  <span className="font-medium">${selectedExpense.itbmsAmount.toLocaleString()}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between">
-                  <span className="font-medium">Total:</span>
-                  <span className="font-bold text-lg text-red-500">${selectedExpense.totalAmount.toLocaleString()}</span>
-                </div>
+              <div className="flex justify-between">
+                <span className="font-medium text-lg">Total:</span>
+                <span className="font-bold text-lg text-red-500">${selectedExpense.totalAmount.toLocaleString()}</span>
               </div>
 
               {selectedExpense.description && (
@@ -1028,16 +1001,6 @@ export default function GastosPage() {
                 placeholder="Detalles adicionales del gasto..."
               />
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="edit-includeItbms"
-                checked={editFormData.includeItbms}
-                onChange={(e) => setEditFormData({...editFormData, includeItbms: e.target.checked})}
-                className="rounded border-gray-300"
-              />
-              <Label htmlFor="edit-includeItbms" className="font-normal">Incluir ITBMS (7%)</Label>
-            </div>
             
             <Separator className="my-4" />
             
@@ -1070,14 +1033,14 @@ export default function GastosPage() {
               
               {editFormData.paidByAdmin && !editFormData.reimbursedByOwner && editFormData.amount && (
                 <div className="text-sm text-amber-700 dark:text-amber-300 mt-2">
-                  <strong>Balance pendiente:</strong> ${(parseFloat(editFormData.amount || '0') * (editFormData.includeItbms ? 1.07 : 1)).toFixed(2)}
+                  <strong>Balance pendiente:</strong> ${parseFloat(editFormData.amount || '0').toFixed(2)}
                 </div>
               )}
             </div>
             
             {editFormData.amount && (
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm">
-                <strong>Total con ITBMS:</strong> ${(parseFloat(editFormData.amount || '0') * (editFormData.includeItbms ? 1.07 : 1)).toFixed(2)}
+                <strong>Total del gasto:</strong> ${parseFloat(editFormData.amount || '0').toFixed(2)}
               </div>
             )}
             <DialogFooter>
