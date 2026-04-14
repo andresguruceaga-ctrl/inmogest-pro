@@ -9,7 +9,6 @@ const createContractSchema = z.object({
   startDate: z.string(),
   endDate: z.string(),
   monthlyAmount: z.number().min(0, 'El monto mensual debe ser válido'),
-  itbmsRate: z.number().min(0).max(100).default(7.0),
   depositAmount: z.number().min(0).optional(),
   terms: z.string().optional().nullable(),
   documentUrl: z.string().optional().nullable(),
@@ -204,10 +203,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calcular ITBMS
-    const itbmsAmount = validatedData.monthlyAmount * (validatedData.itbmsRate / 100);
-
-    // Crear el contrato
+    // Crear el contrato (sin ITBMS, itbmsAmount = 0)
     const contract = await prisma.contract.create({
       data: {
         contractType: validatedData.contractType as any,
@@ -215,7 +211,7 @@ export async function POST(request: NextRequest) {
         startDate: startDate,
         endDate: endDate,
         monthlyAmount: validatedData.monthlyAmount,
-        itbmsAmount: itbmsAmount,
+        itbmsAmount: 0,
         depositAmount: validatedData.depositAmount ?? null,
         terms: validatedData.terms ?? null,
         documentUrl: validatedData.documentUrl ?? null,
