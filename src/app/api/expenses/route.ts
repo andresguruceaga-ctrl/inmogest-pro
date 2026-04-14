@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
 
-// ITBMS rate for Panama (7%)
-const ITBMS_RATE = 7.0;
-
 // Esquema de validación para crear gasto
 const createExpenseSchema = z.object({
   title: z.string().min(1, 'El título es requerido'),
@@ -12,7 +9,6 @@ const createExpenseSchema = z.object({
   category: z.string(),
   expenseType: z.string().default('VARIABLE'),
   amount: z.number().min(0, 'El monto debe ser válido'),
-  includeItbms: z.boolean().default(true),
   invoiceNumber: z.string().optional().nullable(),
   invoiceDate: z.string().optional().nullable(),
   supplier: z.string().optional().nullable(),
@@ -94,8 +90,6 @@ export async function GET(request: NextRequest) {
 
     // Calcular totales
     const totalExpenses = expenses.reduce((sum, expense) => sum + expense.totalAmount, 0);
-    const totalITBMS = expenses.reduce((sum, expense) => sum + expense.itbmsAmount, 0);
-    const totalBase = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
     // Calcular balance de gastos administrados
     const adminPaidExpenses = expenses.filter(e => e.paidByAdmin);
@@ -113,14 +107,12 @@ export async function GET(request: NextRequest) {
         acc[cat] = {
           count: 0,
           total: 0,
-          itbms: 0,
         };
       }
       acc[cat].count++;
       acc[cat].total += expense.totalAmount;
-      acc[cat].itbms += expense.itbmsAmount;
       return acc;
-    }, {} as Record<string, { count: number; total: number; itbms: number }>);
+    }, {} as Record<string, { count: number; total: number }>);
 
     // Agrupar por tipo
     const byType = {
@@ -144,8 +136,6 @@ export async function GET(request: NextRequest) {
       count: expenses.length,
       summary: {
         totalExpenses,
-        totalITBMS,
-        totalBase,
         byCategory,
         byType,
         adminBalance: {
@@ -195,13 +185,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calcular ITBMS y total
-    const itbmsAmount = validatedData.includeItbms
-      ? validatedData.amount * (ITBMS_RATE / 100)
-      : 0;
-    const totalAmount = validatedData.amount + itbmsAmount;
-
-    // Crear el gasto
+    // Crear el gasto (sin ITBMS, totalAmount = amount)
     const expense = await prisma.expense.create({
       data: {
         title: validatedData.title,
@@ -209,8 +193,8 @@ export async function POST(request: NextRequest) {
         category: validatedData.category as any,
         expenseType: validatedData.expenseType as any,
         amount: validatedData.amount,
-        itbmsAmount: itbmsAmount,
-        totalAmount: totalAmount,
+        itbmsAmount: 0,
+        totalAmount: validatedData.amount,
         invoiceNumber: validatedData.invoiceNumber ?? null,
         invoiceDate: validatedData.invoiceDate ? new Date(validatedData.invoiceDate) : null,
         supplier: validatedData.supplier ?? null,
