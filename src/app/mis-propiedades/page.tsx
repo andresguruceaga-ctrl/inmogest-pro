@@ -22,8 +22,6 @@ interface Property {
   province: string
   propertyType: string
   monthlyRent: number
-  itbmsAmount: number
-  totalRentWithITBMS: number
   status: string
   bedrooms: number
   bathrooms: number
@@ -144,7 +142,6 @@ export default function MisPropiedadesPage() {
 
   // Calculate summary
   const totalMonthlyRent = properties.reduce((sum, p) => sum + p.monthlyRent, 0)
-  const totalITBMS = properties.reduce((sum, p) => sum + (p.itbmsAmount || 0), 0)
   const occupiedCount = properties.filter(p => p.status === 'OCUPADA').length
   const availableCount = properties.filter(p => p.status === 'DISPONIBLE').length
 
@@ -199,8 +196,8 @@ export default function MisPropiedadesPage() {
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">ITBMS Mensual</p>
-                      <p className="text-2xl font-bold mt-1 text-blue-500">{formatCurrency(totalITBMS)}</p>
+                      <p className="text-sm text-muted-foreground">Propiedades Ocupadas</p>
+                      <p className="text-2xl font-bold mt-1 text-blue-500">{occupiedCount}</p>
                     </div>
                     <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
                       <DollarSign className="h-5 w-5 text-blue-500" />
@@ -213,11 +210,8 @@ export default function MisPropiedadesPage() {
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">Ocupación</p>
-                      <p className="text-2xl font-bold mt-1">{occupiedCount}/{properties.length}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {availableCount} disponible(s)
-                      </p>
+                      <p className="text-sm text-muted-foreground">Disponibles</p>
+                      <p className="text-2xl font-bold mt-1">{availableCount}</p>
                     </div>
                     <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
                       <TrendingDown className="h-5 w-5 text-amber-500" />
@@ -300,9 +294,6 @@ export default function MisPropiedadesPage() {
                               <p className="text-xl font-bold">
                                 {formatCurrency(property.monthlyRent)}
                                 <span className="text-sm font-normal text-muted-foreground">/mes</span>
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                + {formatCurrency(property.itbmsAmount || 0)} ITBMS
                               </p>
                             </div>
                             <DropdownMenu>
@@ -389,22 +380,11 @@ export default function MisPropiedadesPage() {
 
               <Separator />
 
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Alquiler base:</span>
-                  <span className="font-medium">{formatCurrency(selectedProperty.monthlyRent)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">ITBMS (7%):</span>
-                  <span className="font-medium">{formatCurrency(selectedProperty.itbmsAmount || 0)}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between">
-                  <span className="font-medium">Total mensual:</span>
-                  <span className="font-bold text-lg text-primary">
-                    {formatCurrency(selectedProperty.totalRentWithITBMS || selectedProperty.monthlyRent + (selectedProperty.itbmsAmount || 0))}
-                  </span>
-                </div>
+              <div className="flex justify-between">
+                <span className="font-medium text-lg">Alquiler mensual:</span>
+                <span className="font-bold text-lg text-primary">
+                  {formatCurrency(selectedProperty.monthlyRent)}
+                </span>
               </div>
 
               {selectedProperty.tenant && (
