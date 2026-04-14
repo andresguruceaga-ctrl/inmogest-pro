@@ -11,17 +11,15 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CreditCard, Plus, ArrowUpRight, ArrowDownRight, Loader2, Upload, FileText, Image, Eye, Download, Calendar, Building2, DollarSign, X, Check } from 'lucide-react'
+import { CreditCard, Plus, ArrowUpRight, ArrowDownRight, Loader2, Upload, FileText, Image, Eye, Calendar, Building2, X, Check } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/hooks/use-toast'
 
 interface Payment {
   id: string
   paymentType: string
   amount: number
-  itbmsAmount: number
   totalAmount: number
   referenceNumber: string | null
   paymentMethod: string | null
@@ -87,7 +85,6 @@ export default function PagosPage() {
     userId: '',
     receiptImage: '',
     receiptFileName: '',
-    includeItbms: false,
   })
 
   useEffect(() => {
@@ -190,7 +187,6 @@ export default function PagosPage() {
         body: JSON.stringify({
           paymentType: formData.paymentType,
           amount: parseFloat(formData.amount),
-          includeItbms: formData.includeItbms,
           referenceNumber: formData.referenceNumber || null,
           paymentMethod: formData.paymentMethod,
           status: 'PAGADO',
@@ -242,7 +238,6 @@ export default function PagosPage() {
       userId: '',
       receiptImage: '',
       receiptFileName: '',
-      includeItbms: false,
     })
   }
 
@@ -336,9 +331,9 @@ export default function PagosPage() {
               </Card>
               <Card>
                 <CardContent className="pt-6">
-                  <p className="text-sm text-muted-foreground">ITBMS Recaudado</p>
+                  <p className="text-sm text-muted-foreground">Total General</p>
                   <p className="text-2xl font-bold">${summary.totalAmount.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Incluye 7% ITBMS</p>
+                  <p className="text-xs text-muted-foreground mt-1">{payments.length} pagos registrados</p>
                 </CardContent>
               </Card>
             </div>
@@ -506,23 +501,6 @@ export default function PagosPage() {
                   required
                 />
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <Switch
-                    id="includeItbms"
-                    checked={formData.includeItbms}
-                    onCheckedChange={(checked) => setFormData({...formData, includeItbms: checked})}
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="includeItbms" className="font-medium cursor-pointer">
-                      Incluir ITBMS (7%)
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Activa esta opción si el pago incluye el Impuesto de Transferencia de Bienes Muebles y Servicios
-                    </p>
-                  </div>
-                </div>
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="referenceNumber">Número de Referencia</Label>
                 <Input
@@ -614,26 +592,9 @@ export default function PagosPage() {
             {formData.amount && (
               <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
                 <h4 className="font-medium mb-2">Resumen del Pago</h4>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Monto base:</span>
-                    <span>${parseFloat(formData.amount).toLocaleString()}</span>
-                  </div>
-                  {formData.includeItbms && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">ITBMS (7%):</span>
-                      <span>${(parseFloat(formData.amount) * 0.07).toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold col-span-2 pt-2 border-t">
-                    <span>Total:</span>
-                    <span className="text-primary">
-                      ${formData.includeItbms 
-                        ? (parseFloat(formData.amount) * 1.07).toFixed(2)
-                        : parseFloat(formData.amount).toLocaleString()
-                      }
-                    </span>
-                  </div>
+                <div className="flex justify-between font-bold text-lg">
+                  <span>Total:</span>
+                  <span className="text-primary">${parseFloat(formData.amount).toLocaleString()}</span>
                 </div>
               </div>
             )}
