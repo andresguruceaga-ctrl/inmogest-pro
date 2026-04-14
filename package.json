@@ -18,6 +18,9 @@
     "db:use-postgres": "git checkout prisma/schema.prisma && prisma generate",
     "db:export": "bun run scripts/export-data.ts",
     "db:import": "bun run scripts/import-data.ts",
+    "db:verify": "bun run scripts/verify-database.ts",
+    "db:clean": "bun run scripts/clean-test-data.ts",
+    "db:add-owner": "bun run scripts/add-owner-with-property.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
