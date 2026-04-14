@@ -49,6 +49,13 @@ interface Property {
   address: string
 }
 
+interface User {
+  id: string
+  name: string
+  email: string
+  role: 'admin' | 'inquilino' | 'propietario'
+}
+
 const statusOptions = [
   { value: 'ABIERTO', label: 'Abierto', color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
   { value: 'EN_PROCESO', label: 'En Proceso', color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' },
@@ -80,6 +87,7 @@ export default function SoportePage() {
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
   
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -104,13 +112,67 @@ export default function SoportePage() {
   })
 
   useEffect(() => {
-    fetchTickets()
-    fetchProperties()
+    // Get current user from localStorage
+    const userStr = localStorage.getItem('inmogest-pro-storage')
+    if (userStr) {
+      try {
+        const parsed = JSON.parse(userStr)
+        if (parsed.state?.user) {
+          setCurrentUser(parsed.state.user)
+        }
+      } catch (e) {
+        console.error('Error parsing user from localStorage:', e)
+      }
+    }
   }, [])
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchTickets()
+      fetchProperties()
+    }
+  }, [currentUser])
 
   const fetchTickets = async () => {
     try {
-      const response = await fetch('/api/tickets')
+      let url = '/api/tickets'
+      
+      // Filter by user role
+      if (currentUser?.role === 'inquilino') {
+        // Inquilino only sees their own tickets
+        url += `?userId=${currentUser.id}`
+      } else if (currentUser?.role === 'propietario') {
+        // Propietario sees tickets from their properties
+        // First get their properties, then filter
+        const propsResponse = await fetch('/api/properties')
+        if (propsResponse.ok) {
+          const propsData = await propsResponse.json()
+          const userProperties = (propsData.properties || []).filter(
+            (p: { ownerId: string }) => p.ownerId === currentUser.id
+          )
+          // If they have properties, we'll filter in the frontend
+          const propertyIds = userProperties.map((p: { id: string }) => p.id)
+          if (propertyIds.length > 0) {
+            // Fetch all tickets and filter by property
+            const response = await fetch(url)
+            if (response.ok) {
+              const data = await response.json()
+              const allTickets = data.data || data.tickets || []
+              const filteredTickets = allTickets.filter(
+                (t: Ticket) => propertyIds.includes(t.property.id)
+              )
+              setTickets(filteredTickets)
+            }
+          } else {
+            setTickets([])
+          }
+        }
+        setLoading(false)
+        return
+      }
+      
+      // Admin sees all tickets
+      const response = await fetch(url)
       if (response.ok) {
         const data = await response.json()
         setTickets(data.data || data.tickets || [])
@@ -127,7 +189,35 @@ export default function SoportePage() {
       const response = await fetch('/api/properties')
       if (response.ok) {
         const data = await response.json()
-        setProperties(data.properties || [])
+        let userProperties = data.properties || []
+        
+        // Filter properties based on user role
+        if (currentUser?.role === 'inquilino') {
+          // Inquilino sees only the property they're renting
+          // Get their contract to find their property
+          const contractsResponse = await fetch('/api/contracts')
+          if (contractsResponse.ok) {
+            const contractsData = await contractsResponse.json()
+            const userContract = (contractsData.contracts || []).find(
+              (c: { tenantId: string; propertyId: string }) => c.tenantId === currentUser.id
+            )
+            if (userContract) {
+              userProperties = userProperties.filter(
+                (p: { id: string }) => p.id === userContract.propertyId
+              )
+            } else {
+              userProperties = []
+            }
+          }
+        } else if (currentUser?.role === 'propietario') {
+          // Propietario sees only their properties
+          userProperties = userProperties.filter(
+            (p: { ownerId: string }) => p.ownerId === currentUser.id
+          )
+        }
+        // Admin sees all properties
+        
+        setProperties(userProperties)
       }
     } catch (error) {
       console.error('Error fetching properties:', error)
@@ -146,11 +236,7 @@ export default function SoportePage() {
       return
     }
 
-    // Get userId from session/localStorage
-    const userStr = localStorage.getItem('user')
-    const user = userStr ? JSON.parse(userStr) : null
-    
-    if (!user?.id) {
+    if (!currentUser?.id) {
       toast({
         title: 'Error',
         description: 'Debes iniciar sesión para crear un ticket',
@@ -170,7 +256,7 @@ export default function SoportePage() {
           category: formData.category || null,
           priority: formData.priority,
           propertyId: formData.propertyId,
-          userId: user.id,
+          userId: currentUser.id,
         }),
       })
 
@@ -329,6 +415,20 @@ export default function SoportePage() {
     return true
   })
 
+  // Check if user can edit/delete tickets
+  const canModifyTicket = (ticket: Ticket) => {
+    if (currentUser?.role === 'admin') return true
+    if (currentUser?.role === 'inquilino' && ticket.user.id === currentUser.id) return true
+    return false
+  }
+
+  // Check if user can respond to tickets (admin and propietario)
+  const canRespondToTicket = (ticket: Ticket) => {
+    if (currentUser?.role === 'admin') return true
+    if (currentUser?.role === 'propietario') return true
+    return false
+  }
+
   return (
     <SidebarProvider>
       <Sidebar />
@@ -448,18 +548,24 @@ export default function SoportePage() {
                                   <Eye className="h-4 w-4 mr-2" />
                                   Ver detalle
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => openEditDialog(ticket)}>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  className="text-destructive"
-                                  onClick={() => handleDeleteTicket(ticket.id)}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Eliminar
-                                </DropdownMenuItem>
+                                {(canModifyTicket(ticket) || canRespondToTicket(ticket)) && (
+                                  <DropdownMenuItem onClick={() => openEditDialog(ticket)}>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Editar
+                                  </DropdownMenuItem>
+                                )}
+                                {canModifyTicket(ticket) && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem 
+                                      className="text-destructive"
+                                      onClick={() => handleDeleteTicket(ticket.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Eliminar
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -563,27 +669,33 @@ export default function SoportePage() {
           <DialogHeader>
             <DialogTitle>Editar Ticket</DialogTitle>
             <DialogDescription>
-              Actualiza el estado, prioridad y otros campos del ticket
+              {currentUser?.role === 'admin' || currentUser?.role === 'propietario'
+                ? 'Actualiza el estado, prioridad y añade una respuesta al ticket'
+                : 'Actualiza la información de tu ticket'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUpdateTicket} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Título</Label>
-              <Input
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Título del ticket"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Descripción</Label>
-              <Textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Descripción del problema"
-                rows={3}
-              />
-            </div>
+            {(currentUser?.role === 'admin' || currentUser?.role === 'inquilino') && (
+              <>
+                <div className="space-y-2">
+                  <Label>Título</Label>
+                  <Input
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder="Título del ticket"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Descripción</Label>
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Descripción del problema"
+                    rows={3}
+                  />
+                </div>
+              </>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Estado</Label>
@@ -612,28 +724,32 @@ export default function SoportePage() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Categoría</Label>
-              <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categoryOptions.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Respuesta</Label>
-              <Textarea
-                value={formData.response}
-                onChange={(e) => setFormData({ ...formData, response: e.target.value })}
-                placeholder="Añade una respuesta o actualización..."
-                rows={4}
-              />
-            </div>
+            {(currentUser?.role === 'admin' || currentUser?.role === 'inquilino') && (
+              <div className="space-y-2">
+                <Label>Categoría</Label>
+                <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categoryOptions.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {(currentUser?.role === 'admin' || currentUser?.role === 'propietario') && (
+              <div className="space-y-2">
+                <Label>Respuesta</Label>
+                <Textarea
+                  value={formData.response}
+                  onChange={(e) => setFormData({ ...formData, response: e.target.value })}
+                  placeholder="Añade una respuesta o actualización..."
+                  rows={4}
+                />
+              </div>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
                 Cancelar
@@ -705,10 +821,12 @@ export default function SoportePage() {
             <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>
               Cerrar
             </Button>
-            <Button onClick={() => { setDetailDialogOpen(false); openEditDialog(selectedTicket!); }}>
-              <Edit className="h-4 w-4 mr-2" />
-              Editar
-            </Button>
+            {(canModifyTicket(selectedTicket!) || canRespondToTicket(selectedTicket!)) && (
+              <Button onClick={() => { setDetailDialogOpen(false); openEditDialog(selectedTicket!); }}>
+                <Edit className="h-4 w-4 mr-2" />
+                Editar
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
