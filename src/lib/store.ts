@@ -59,7 +59,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard-propietario', label: 'Dashboard', href: '/', icon: 'LayoutDashboard', roles: ['propietario'] },
   { id: 'mis-propiedades', label: 'Mis Propiedades', href: '/mis-propiedades', icon: 'Building2', roles: ['propietario'] },
   { id: 'contratos-propietario', label: 'Contratos', href: '/contratos', icon: 'FileText', roles: ['propietario'] },
-  { id: 'reportes-financieros', label: 'Reportes Financieros', href: '/reportes-financieros', icon: 'TrendingUp', roles: ['propietario'] },
   { id: 'soporte-propietario', label: 'Soporte', href: '/soporte', icon: 'HelpCircle', roles: ['propietario'] },
   { id: 'perfil-propietario', label: 'Perfil', href: '/perfil', icon: 'User', roles: ['propietario'] },
 ]

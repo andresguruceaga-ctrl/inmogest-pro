@@ -236,7 +236,7 @@ export function Sidebar() {
     ['contratos', 'gastos', 'documentos', 'inquilinos', 'propietarios', 'mi-contrato', 'pagos', 'mi-propiedad', 'mis-propiedades'].includes(item.id)
   )
   const reportNavItems = navItems.filter((item) => 
-    ['reportes', 'reportes-financieros'].includes(item.id)
+    ['reportes'].includes(item.id)
   )
   const supportNavItems = navItems.filter((item) => 
     ['soporte', 'perfil'].includes(item.id)
