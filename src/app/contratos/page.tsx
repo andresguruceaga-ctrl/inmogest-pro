@@ -28,7 +28,6 @@ interface Contract {
   startDate: string
   endDate: string
   monthlyAmount: number
-  itbmsAmount: number | null
   depositAmount: number | null
   terms: string | null
   status: string
@@ -85,7 +84,6 @@ export default function ContratosPage() {
     terms: '',
     tenantId: '',
     status: 'VIGENTE' as typeof CONTRACT_STATUSES[number],
-    includeItbms: true,
   })
 
   // Delete confirmation state
@@ -104,7 +102,6 @@ export default function ContratosPage() {
     propertyId: '',
     ownerId: '',
     tenantId: '',
-    includeItbms: true,
   })
 
   // Memoized valid tenant ID for edit form
@@ -184,7 +181,6 @@ export default function ContratosPage() {
           propertyId: formData.propertyId,
           ownerId: selectedProperty.ownerId,
           tenantId: formData.tenantId || null,
-          itbmsRate: formData.includeItbms ? 7.0 : 0,
         }),
       })
 
@@ -254,7 +250,6 @@ export default function ContratosPage() {
           terms: editFormData.terms || null,
           status: editFormData.status,
           tenantId: editFormData.tenantId || null,
-          itbmsRate: editFormData.includeItbms ? 7.0 : 0,
         }),
       })
 
@@ -429,10 +424,6 @@ export default function ContratosPage() {
       ? contract.status as typeof CONTRACT_STATUSES[number]
       : 'VIGENTE'
 
-    // Calculate includeItbms
-    const itbmsAmountValue = contract.itbmsAmount != null ? Number(contract.itbmsAmount) : 0
-    const includeItbms = !isNaN(itbmsAmountValue) && itbmsAmountValue > 0
-
     setEditFormData({
       contractType,
       contractNumber: contract.contractNumber || '',
@@ -443,7 +434,6 @@ export default function ContratosPage() {
       terms: contract.terms || '',
       tenantId: contract.tenant?.id || '',
       status,
-      includeItbms,
     })
     
     setEditOpen(true)
@@ -466,7 +456,6 @@ export default function ContratosPage() {
       propertyId: '',
       ownerId: '',
       tenantId: '',
-      includeItbms: true,
     })
   }
 
@@ -603,7 +592,7 @@ export default function ContratosPage() {
                             </div>
                           </TableCell>
                           <TableCell className="font-medium">
-                            ${((contract.monthlyAmount ?? 0) + (contract.itbmsAmount ?? 0)).toLocaleString()}
+                            ${(contract.monthlyAmount ?? 0).toLocaleString()}
                           </TableCell>
                           <TableCell>
                             {getStatusBadge(contract.status, contract.isActive)}
@@ -744,20 +733,6 @@ export default function ContratosPage() {
                 />
               </div>
               <div className="space-y-2">
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <input
-                    type="checkbox"
-                    id="includeItbms"
-                    checked={formData.includeItbms}
-                    onChange={(e) => setFormData({...formData, includeItbms: e.target.checked})}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <Label htmlFor="includeItbms" className="font-medium cursor-pointer">
-                    Incluir ITBMS (7%)
-                  </Label>
-                </div>
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="depositAmount">Depósito (USD)</Label>
                 <Input
                   id="depositAmount"
@@ -880,18 +855,9 @@ export default function ContratosPage() {
               
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Monto mensual:</span>
-                  <span className="font-medium">${(selectedContract.monthlyAmount ?? 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">ITBMS:</span>
-                  <span className="font-medium">${(selectedContract.itbmsAmount ?? 0).toLocaleString()}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between">
-                  <span className="font-medium">Total mensual:</span>
+                  <span className="font-medium text-lg">Monto mensual:</span>
                   <span className="font-bold text-lg text-primary">
-                    ${((selectedContract.monthlyAmount ?? 0) + (selectedContract.itbmsAmount ?? 0)).toLocaleString()}
+                    ${(selectedContract.monthlyAmount ?? 0).toLocaleString()}
                   </span>
                 </div>
                 {selectedContract.depositAmount != null && (
@@ -1029,20 +995,6 @@ export default function ContratosPage() {
                   placeholder="2500"
                   required
                 />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <input
-                    type="checkbox"
-                    id="edit-includeItbms"
-                    checked={editFormData.includeItbms}
-                    onChange={(e) => setEditFormData({...editFormData, includeItbms: e.target.checked})}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <Label htmlFor="edit-includeItbms" className="font-medium cursor-pointer">
-                    Incluir ITBMS (7%)
-                  </Label>
-                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-depositAmount">Depósito (USD)</Label>
