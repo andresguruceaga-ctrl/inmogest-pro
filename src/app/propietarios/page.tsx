@@ -13,9 +13,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { UserCheck, Plus, Search, Filter, MoreHorizontal, Eye, Edit, Phone, Mail, Building2, Loader2, Trash2, LayoutDashboard, TrendingUp, TrendingDown, DollarSign, Receipt, Separator, ArrowUpRight, ArrowDownRight, BarChart3, Calendar, PieChart, Ticket, Upload, X, ImageIcon } from 'lucide-react'
+import { UserCheck, Plus, Search, Filter, MoreHorizontal, Eye, Edit, Phone, Mail, Building2, Loader2, Trash2, LayoutDashboard, TrendingUp, TrendingDown, DollarSign, Receipt, Separator, ArrowUpRight, ArrowDownRight, BarChart3, Calendar, PieChart, Ticket, Upload, X, ImageIcon, Wallet, CreditCard } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
@@ -80,7 +80,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   OTROS: 'Otros',
 }
 
-// Owner ticket categories
 const OWNER_TICKET_CATEGORIES = [
   { value: 'REPARACION', label: 'Reparación' },
   { value: 'MANTENIMIENTO', label: 'Mantenimiento' },
@@ -96,6 +95,14 @@ const TICKET_PRIORITIES = [
   { value: 'MEDIA', label: 'Media' },
   { value: 'ALTA', label: 'Alta' },
   { value: 'URGENTE', label: 'Urgente' },
+]
+
+const PAYMENT_METHODS = [
+  { value: 'TRANSFERENCIA', label: 'Transferencia Bancaria' },
+  { value: 'EFECTIVO', label: 'Efectivo' },
+  { value: 'CHEQUE', label: 'Cheque' },
+  { value: 'YAPE', label: 'Yape' },
+  { value: 'OTRO', label: 'Otro' },
 ]
 
 export default function PropietariosPage() {
@@ -118,6 +125,10 @@ export default function PropietariosPage() {
   const [ticketOwnerProperties, setTicketOwnerProperties] = useState<Array<{id: string, title: string}>>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Payment state
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [paymentOwner, setPaymentOwner] = useState<Owner | null>(null)
   
   const { toast } = useToast()
 
@@ -143,6 +154,14 @@ export default function PropietariosPage() {
     propertyId: '',
     photos: '',
     photoFileName: '',
+  })
+
+  const [paymentForm, setPaymentForm] = useState({
+    amount: '',
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: '',
+    referenceNumber: '',
+    notes: '',
   })
 
   useEffect(() => {
@@ -383,14 +402,12 @@ export default function PropietariosPage() {
   // Ticket functions
   const openTicketDialog = async (owner: Owner) => {
     setTicketOwner(owner)
-    // Fetch owner's properties
     try {
       const response = await fetch(`/api/properties?ownerId=${owner.id}`)
       if (response.ok) {
         const result = await response.json()
         const properties = result.properties || result.data || []
         setTicketOwnerProperties(properties.map((p: {id: string, title: string}) => ({ id: p.id, title: p.title })))
-        // Auto-select first property
         if (properties.length > 0) {
           setTicketForm(prev => ({ ...prev, propertyId: properties[0].id }))
         }
@@ -516,6 +533,74 @@ export default function PropietariosPage() {
     setTicketOwnerProperties([])
   }
 
+  // Payment functions
+  const openPaymentDialog = (owner: Owner) => {
+    setPaymentOwner(owner)
+    setPaymentForm({
+      amount: '',
+      paymentDate: new Date().toISOString().split('T')[0],
+      paymentMethod: '',
+      referenceNumber: '',
+      notes: '',
+    })
+    setPaymentDialogOpen(true)
+  }
+
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!paymentOwner || !paymentForm.amount) {
+      toast({
+        title: 'Error',
+        description: 'Por favor ingresa el monto del pago',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const response = await fetch('/api/owner-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ownerId: paymentOwner.id,
+          amount: parseFloat(paymentForm.amount),
+          paymentDate: paymentForm.paymentDate,
+          paymentMethod: paymentForm.paymentMethod || null,
+          referenceNumber: paymentForm.referenceNumber || null,
+          notes: paymentForm.notes || null,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast({
+          title: 'Pago registrado',
+          description: 'El pago se ha registrado exitosamente.',
+        })
+        setPaymentDialogOpen(false)
+        setPaymentOwner(null)
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'No se pudo registrar el pago',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Error de conexión',
+        variant: 'destructive',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const currentMonth = new Date().toLocaleDateString('es-PA', { month: 'long', year: 'numeric' })
 
   return (
@@ -630,6 +715,10 @@ export default function PropietariosPage() {
                                   <LayoutDashboard className="h-4 w-4 mr-2" />
                                   Ver Dashboard
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openPaymentDialog(owner)}>
+                                  <CreditCard className="h-4 w-4 mr-2" />
+                                  Registrar Pago
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => openTicketDialog(owner)}>
                                   <Ticket className="h-4 w-4 mr-2" />
                                   Crear Ticket
@@ -638,6 +727,7 @@ export default function PropietariosPage() {
                                   <Eye className="h-4 w-4 mr-2" />
                                   Ver detalle
                                 </DropdownMenuItem>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => openEditDialog(owner)}>
                                   <Edit className="h-4 w-4 mr-2" />
                                   Editar
@@ -1124,6 +1214,85 @@ export default function PropietariosPage() {
               <Button type="submit" disabled={saving || uploading}>
                 {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Crear Ticket
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para Registrar Pago */}
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Registrar Pago de {paymentOwner?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Registra un pago realizado por el propietario a la administración
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handlePaymentSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Monto *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={paymentForm.amount}
+                onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                placeholder="0.00"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Fecha *</Label>
+              <Input
+                type="date"
+                value={paymentForm.paymentDate}
+                onChange={(e) => setPaymentForm({ ...paymentForm, paymentDate: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Método de Pago</Label>
+              <Select 
+                value={paymentForm.paymentMethod} 
+                onValueChange={(v) => setPaymentForm({ ...paymentForm, paymentMethod: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar método" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Número de Referencia</Label>
+              <Input
+                value={paymentForm.referenceNumber}
+                onChange={(e) => setPaymentForm({ ...paymentForm, referenceNumber: e.target.value })}
+                placeholder="Ej: TRANS-123456"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Notas</Label>
+              <Textarea
+                value={paymentForm.notes}
+                onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                placeholder="Notas adicionales..."
+                rows={2}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setPaymentDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Registrar Pago
               </Button>
             </DialogFooter>
           </form>
