@@ -868,7 +868,93 @@ export function generateReportPDF(report: ReportPDFData): jsPDF {
       },
     })
   }
+  
+  // Owner Balance Section (Relación de Gastos)
+  if (report.data.ownerBalances && report.data.ownerBalances.length > 0) {
+    // Check if we need a new page
+    if (y > pageHeight - 100) {
+      doc.addPage()
+      y = 20
+    }
 
+    doc.setFontSize(14)
+    doc.setTextColor(40, 40, 40)
+    doc.text('Relación de Gastos con Propietarios', 14, y)
+    y += 8
+
+    // Summary totals
+    const totals = report.data.ownerBalances.reduce(
+      (acc, ob) => ({
+        pending: acc.pending + ob.totals.pending,
+        payments: acc.payments + ob.totals.payments,
+        balance: acc.balance + ob.totals.balance,
+      }),
+      { pending: 0, payments: 0, balance: 0 }
+    )
+
+    // Summary box
+    doc.setFillColor(248, 250, 252)
+    doc.roundedRect(14, y, pageWidth - 28, 25, 3, 3, 'F')
+    
+    doc.setFontSize(9)
+    doc.setTextColor(100, 100, 100)
+    doc.text('Total Pendiente:', 20, y + 10)
+    doc.setTextColor(220, 38, 38) // red-600
+    doc.text(formatCurrency(totals.pending), 70, y + 10)
+    
+    doc.setTextColor(100, 100, 100)
+    doc.text('Total Pagos:', 110, y + 10)
+    doc.setTextColor(34, 197, 94) // green-500
+    doc.text(formatCurrency(totals.payments), 150, y + 10)
+    
+    doc.setTextColor(100, 100, 100)
+    doc.text('Balance General:', 20, y + 20)
+    doc.setTextColor(totals.balance >= 0 ? 34 : 220, totals.balance >= 0 ? 197 : 38, totals.balance >= 0 ? 94 : 38)
+    doc.text(formatCurrency(totals.balance), 70, y + 20)
+
+    y += 35
+
+    // Owners table
+    const ownerBalanceData = report.data.ownerBalances.map(ob => [
+      ob.owner.name,
+      ob.owner.propertiesCount + ' props',
+      formatCurrency(ob.totals.pending),
+      formatCurrency(ob.totals.payments),
+      formatCurrency(ob.totals.balance),
+      ob.totals.balance >= 0 ? 'A favor Admin' : 'Debe Propietario',
+    ])
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Propietario', 'Propiedades', 'Pendiente', 'Pagos', 'Balance', 'Estado']],
+      body: ownerBalanceData,
+      theme: 'striped',
+      headStyles: { fillColor: [139, 92, 246] }, // violet-500
+      styles: { fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 45 },
+        1: { cellWidth: 25, halign: 'center' },
+        2: { cellWidth: 30, halign: 'right' },
+        3: { cellWidth: 30, halign: 'right' },
+        4: { cellWidth: 30, halign: 'right' },
+        5: { cellWidth: 35, halign: 'center' },
+      },
+      didParseCell: function (data) {
+        // Color the balance column
+        if (data.column.index === 4 && data.section === 'body') {
+          const value = report.data!.ownerBalances![data.row.index].totals.balance
+          if (value < 0) {
+            data.cell.styles.textColor = [220, 38, 38] // red-600
+          } else {
+            data.cell.styles.textColor = [34, 197, 94] // green-500
+          }
+        }
+      },
+    })
+
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY + 15 || 100
+  }
+  
   // Footer with page numbers
   const pageCount = doc.getNumberOfPages()
   for (let i = 1; i <= pageCount; i++) {
