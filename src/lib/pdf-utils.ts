@@ -529,4 +529,83 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
   }
 
   return Buffer.from(doc.output('arraybuffer'))
+  export async function generateContractPDF(data: {
+  contract: {
+    id: string
+    startDate: string
+    endDate: string
+    monthlyRent: number
+    deposit: number
+    status: string
+    property: {
+      name: string
+      address: string
+    }
+    tenant: {
+      name: string
+      email: string
+      phone?: string
+      dni?: string
+    }
+    owner?: {
+      name: string
+      email: string
+      phone?: string
+    }
+  }
+}): Promise<Buffer> {
+  const doc = new jsPDF()
+  const pageWidth = doc.internal.pageSize.getWidth()
+  
+  // Header
+  doc.setFontSize(20)
+  doc.text('CONTRATO DE ARRENDAMIENTO', pageWidth / 2, 20, { align: 'center' })
+  
+  doc.setFontSize(10)
+  doc.text(`Generado el: ${format(new Date(), 'dd/MM/yyyy')}`, pageWidth / 2, 30, { align: 'center' })
+  
+  // Property Info
+  doc.setFontSize(12)
+  doc.text('INFORMACIÓN DE LA PROPIEDAD', 14, 45)
+  doc.setFontSize(10)
+  doc.text(`Propiedad: ${data.contract.property.name}`, 14, 55)
+  doc.text(`Dirección: ${data.contract.property.address}`, 14, 62)
+  
+  // Tenant Info
+  doc.setFontSize(12)
+  doc.text('INFORMACIÓN DEL INQUILINO', 14, 77)
+  doc.setFontSize(10)
+  doc.text(`Nombre: ${data.contract.tenant.name}`, 14, 87)
+  doc.text(`Email: ${data.contract.tenant.email}`, 14, 94)
+  if (data.contract.tenant.phone) {
+    doc.text(`Teléfono: ${data.contract.tenant.phone}`, 14, 101)
+  }
+  if (data.contract.tenant.dni) {
+    doc.text(`DNI: ${data.contract.tenant.dni}`, 14, 108)
+  }
+  
+  // Contract Details
+  doc.setFontSize(12)
+  doc.text('DETALLES DEL CONTRATO', 14, 123)
+  doc.setFontSize(10)
+  doc.text(`Fecha de Inicio: ${format(new Date(data.contract.startDate), 'dd/MM/yyyy')}`, 14, 133)
+  doc.text(`Fecha de Fin: ${format(new Date(data.contract.endDate), 'dd/MM/yyyy')}`, 14, 140)
+  doc.text(`Alquiler Mensual: $${data.contract.monthlyRent.toFixed(2)}`, 14, 147)
+  doc.text(`Depósito: $${data.contract.deposit.toFixed(2)}`, 14, 154)
+  doc.text(`Estado: ${data.contract.status}`, 14, 161)
+  
+  // Owner Info (if exists)
+  if (data.contract.owner) {
+    doc.setFontSize(12)
+    doc.text('INFORMACIÓN DEL PROPIETARIO', 14, 176)
+    doc.setFontSize(10)
+    doc.text(`Nombre: ${data.contract.owner.name}`, 14, 186)
+    doc.text(`Email: ${data.contract.owner.email}`, 14, 193)
+    if (data.contract.owner.phone) {
+      doc.text(`Teléfono: ${data.contract.owner.phone}`, 14, 200)
+    }
+  }
+  
+  return Buffer.from(doc.output('arraybuffer'))
+}
 }
