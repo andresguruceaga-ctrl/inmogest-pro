@@ -28,6 +28,7 @@ model User {
   propertiesAsOwner  Property[]      @relation("OwnerProperties")
   propertiesAsTenant Property[]      @relation("TenantProperties")
   supportTickets     SupportTicket[]
+  ownerPayments     OwnerPayment[]  
 }
 
 model Property {
@@ -264,6 +265,23 @@ model DashboardStats {
   monthlyRevenue  Float    @default(0)
   totalExpenses   Float    @default(0)
   updatedAt       DateTime @updatedAt
+}
+
+model OwnerPayment {
+  id              String   @id @default(cuid())
+  amount          Float
+  paymentDate     DateTime
+  paymentMethod   String?
+  referenceNumber String?
+  notes           String?
+  receiptImage    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([paymentDate])
 }
 
 enum UserRole {
