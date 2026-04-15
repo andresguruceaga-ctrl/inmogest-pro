@@ -84,7 +84,7 @@ interface OwnerBalanceData {
   totalReimbursed: number
   ownerPayments: OwnerPaymentData[]
   totalPayments: number
-  balance: number // positivo = saldo a favor, negativo = debe dinero
+  balance: number
 }
 
 interface ReportPDFData {
@@ -119,7 +119,6 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
   const margin = 20
   let yPosition = margin
 
-  // Helper function to add text with word wrap
   const addText = (text: string, x: number, y: number, options: {
     maxWidth?: number
     fontSize?: number
@@ -146,7 +145,6 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
     return y + lines.length * (fontSize * 0.5)
   }
 
-  // Helper to check if we need a new page
   const checkNewPage = (neededHeight: number) => {
     if (yPosition + neededHeight > pageHeight - margin) {
       doc.addPage()
@@ -217,7 +215,6 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
     
     yPosition += 30
     
-    // Owner balance summary
     if (data.ownerBalances && data.ownerBalances.length > 0) {
       doc.setTextColor(30, 64, 175)
       doc.setFont('helvetica', 'bold')
@@ -308,7 +305,6 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
       yPosition += 8
     })
     
-    // Income total
     yPosition += 5
     const totalIncome = data.incomes.reduce((sum, inc) => sum + inc.amount, 0)
     doc.setTextColor(34, 197, 94)
@@ -359,7 +355,6 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
       yPosition += 8
     })
     
-    // Expense total
     yPosition += 5
     const totalExpense = data.expenses.reduce((sum, exp) => sum + exp.amount, 0)
     doc.setTextColor(239, 68, 68)
@@ -394,19 +389,6 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
       doc.setFontSize(8)
       doc.setTextColor(100, 100, 100)
       
-      const statusColors: Record<string, [number, number, number]> = {
-        'OPEN': [239, 68, 68],
-        'IN_PROGRESS': [234, 179, 8],
-        'RESOLVED': [34, 197, 94],
-        'CLOSED': [107, 114, 128]
-      }
-      const priorityColors: Record<string, [number, number, number]> = {
-        'LOW': [107, 114, 128],
-        'MEDIUM': [234, 179, 8],
-        'HIGH': [249, 115, 22],
-        'URGENT': [239, 68, 68]
-      }
-      
       doc.setTextColor(60, 60, 60)
       doc.text(`Estado: ${ticket.status} | Prioridad: ${ticket.priority}`, margin + 5, yPosition)
       yPosition += 4
@@ -428,7 +410,7 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
     yPosition += 5
   }
 
-  // Owner Balances section (Relación de Gastos)
+  // Owner Balances section
   if (data.ownerBalances && data.ownerBalances.length > 0) {
     checkNewPage(30)
     
@@ -443,7 +425,6 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
     data.ownerBalances.forEach((ownerBalance, index) => {
       checkNewPage(50)
       
-      // Owner header
       doc.setTextColor(30, 64, 175)
       doc.setFontSize(11)
       doc.setFont('helvetica', 'bold')
@@ -456,7 +437,6 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
       doc.text(`Email: ${ownerBalance.ownerEmail}${ownerBalance.ownerPhone ? ` | Tel: ${ownerBalance.ownerPhone}` : ''}`, margin + 5, yPosition)
       yPosition += 8
       
-      // Balance summary box
       const boxColor = ownerBalance.balance >= 0 ? [220, 252, 231] : [254, 226, 226]
       doc.setFillColor(boxColor[0], boxColor[1], boxColor[2])
       doc.rect(margin + 5, yPosition, pageWidth - 2 * margin - 10, 15, 'F')
@@ -470,7 +450,6 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
       doc.text(`Balance: $${Math.abs(ownerBalance.balance).toFixed(2)} ${ownerBalance.balance >= 0 ? '(Saldo a favor)' : '(Debe)'}`, margin + 10, yPosition + 12)
       yPosition += 20
 
-      // Pending expenses
       if (ownerBalance.pendingExpenses.length > 0) {
         doc.setTextColor(60, 60, 60)
         doc.setFontSize(9)
@@ -489,7 +468,6 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
         yPosition += 3
       }
 
-      // Owner payments
       if (ownerBalance.ownerPayments.length > 0) {
         doc.setTextColor(60, 60, 60)
         doc.setFontSize(9)
@@ -529,7 +507,9 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
   }
 
   return Buffer.from(doc.output('arraybuffer'))
-  export async function generateContractPDF(data: {
+}
+
+export async function generateContractPDF(data: {
   contract: {
     id: string
     startDate: string
@@ -566,19 +546,19 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
   
   // Property Info
   doc.setFontSize(12)
-  doc.text('INFORMACIÓN DE LA PROPIEDAD', 14, 45)
+  doc.text('INFORMACION DE LA PROPIEDAD', 14, 45)
   doc.setFontSize(10)
   doc.text(`Propiedad: ${data.contract.property.name}`, 14, 55)
-  doc.text(`Dirección: ${data.contract.property.address}`, 14, 62)
+  doc.text(`Direccion: ${data.contract.property.address}`, 14, 62)
   
   // Tenant Info
   doc.setFontSize(12)
-  doc.text('INFORMACIÓN DEL INQUILINO', 14, 77)
+  doc.text('INFORMACION DEL INQUILINO', 14, 77)
   doc.setFontSize(10)
   doc.text(`Nombre: ${data.contract.tenant.name}`, 14, 87)
   doc.text(`Email: ${data.contract.tenant.email}`, 14, 94)
   if (data.contract.tenant.phone) {
-    doc.text(`Teléfono: ${data.contract.tenant.phone}`, 14, 101)
+    doc.text(`Telefono: ${data.contract.tenant.phone}`, 14, 101)
   }
   if (data.contract.tenant.dni) {
     doc.text(`DNI: ${data.contract.tenant.dni}`, 14, 108)
@@ -591,21 +571,20 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
   doc.text(`Fecha de Inicio: ${format(new Date(data.contract.startDate), 'dd/MM/yyyy')}`, 14, 133)
   doc.text(`Fecha de Fin: ${format(new Date(data.contract.endDate), 'dd/MM/yyyy')}`, 14, 140)
   doc.text(`Alquiler Mensual: $${data.contract.monthlyRent.toFixed(2)}`, 14, 147)
-  doc.text(`Depósito: $${data.contract.deposit.toFixed(2)}`, 14, 154)
+  doc.text(`Deposito: $${data.contract.deposit.toFixed(2)}`, 14, 154)
   doc.text(`Estado: ${data.contract.status}`, 14, 161)
   
-  // Owner Info (if exists)
+  // Owner Info
   if (data.contract.owner) {
     doc.setFontSize(12)
-    doc.text('INFORMACIÓN DEL PROPIETARIO', 14, 176)
+    doc.text('INFORMACION DEL PROPIETARIO', 14, 176)
     doc.setFontSize(10)
     doc.text(`Nombre: ${data.contract.owner.name}`, 14, 186)
     doc.text(`Email: ${data.contract.owner.email}`, 14, 193)
     if (data.contract.owner.phone) {
-      doc.text(`Teléfono: ${data.contract.owner.phone}`, 14, 200)
+      doc.text(`Telefono: ${data.contract.owner.phone}`, 14, 200)
     }
   }
   
   return Buffer.from(doc.output('arraybuffer'))
-}
 }
