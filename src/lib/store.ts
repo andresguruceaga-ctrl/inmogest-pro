@@ -45,6 +45,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'documentos', label: 'Documentos', href: '/documentos', icon: 'FolderOpen', roles: ['admin'] },
   { id: 'inquilinos', label: 'Inquilinos', href: '/inquilinos', icon: 'Users', roles: ['admin'] },
   { id: 'propietarios', label: 'Propietarios', href: '/propietarios', icon: 'UserCheck', roles: ['admin'] },
+  { id: 'relacion-gastos', label: 'Relación de Gastos', href: '/relacion-gastos', icon: 'Wallet', roles: ['admin'] },
   { id: 'reportes', label: 'Reportes', href: '/reportes', icon: 'BarChart3', roles: ['admin'] },
   { id: 'soporte', label: 'Soporte', href: '/soporte', icon: 'HelpCircle', roles: ['admin'] },
   
@@ -60,6 +61,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard-propietario', label: 'Dashboard', href: '/', icon: 'LayoutDashboard', roles: ['propietario'] },
   { id: 'mis-propiedades', label: 'Mis Propiedades', href: '/mis-propiedades', icon: 'Building2', roles: ['propietario'] },
   { id: 'contratos-propietario', label: 'Contratos', href: '/contratos', icon: 'FileText', roles: ['propietario'] },
+  { id: 'relacion-gastos', label: 'Relación de Gastos', href: '/relacion-gastos', icon: 'Wallet', roles: ['propietario'] },
   { id: 'soporte', label: 'Soporte', href: '/soporte', icon: 'HelpCircle', roles: ['propietario'] },
   { id: 'perfil', label: 'Perfil', href: '/perfil', icon: 'User', roles: ['propietario'] },
 ]
