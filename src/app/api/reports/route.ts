@@ -18,15 +18,15 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate')
     const format_type = searchParams.get('format') || 'json'
 
-    // Build date filter
-    const dateFilter: any = {}
+    // Build date filter for expenses
+    const expenseDateFilter: any = {}
     if (startDate && endDate) {
-      dateFilter.gte = new Date(startDate)
-      dateFilter.lte = new Date(endDate)
+      expenseDateFilter.gte = new Date(startDate)
+      expenseDateFilter.lte = new Date(endDate)
     }
 
     // Fetch all data in parallel
-    const [properties, incomes, expenses, tickets, ownerBalances] = await Promise.all([
+    const [properties, expenses, tickets, ownerBalances] = await Promise.all([
       // Properties
       prisma.property.findMany({
         include: {
@@ -45,36 +45,25 @@ export async function GET(request: NextRequest) {
             }
           }
         },
-        orderBy: { name: 'asc' }
+        orderBy: { title: 'asc' }
       }),
       
-      // Incomes
-      prisma.income.findMany({
-        where: startDate && endDate ? { date: dateFilter } : {},
-        include: {
-          property: {
-            select: { name: true }
-          }
-        },
-        orderBy: { date: 'desc' }
-      }),
-      
-      // Expenses
+      // Expenses - CORREGIDO: usar expenseDate
       prisma.expense.findMany({
-        where: startDate && endDate ? { date: dateFilter } : {},
+        where: startDate && endDate ? { expenseDate: expenseDateFilter } : {},
         include: {
           property: {
-            select: { name: true }
+            select: { id: true, title: true }
           }
         },
-        orderBy: { date: 'desc' }
+        orderBy: { expenseDate: 'desc' }
       }),
       
-      // Tickets
-      prisma.ticket.findMany({
+      // Tickets - CORREGIDO: usar supportTicket
+      prisma.supportTicket.findMany({
         include: {
           property: {
-            select: { name: true }
+            select: { id: true, title: true }
           },
           user: {
             select: { name: true, email: true }
@@ -88,9 +77,8 @@ export async function GET(request: NextRequest) {
     ])
 
     // Calculate summary
-    const totalIncome = incomes.reduce((sum, inc) => sum + inc.amount, 0)
     const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0)
-    const openTickets = tickets.filter(t => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length
+    const openTickets = tickets.filter(t => t.status === 'ABIERTO' || t.status === 'EN_PROCESO').length
     
     // Calculate owner balance summary
     const totalPendingExpenses = ownerBalances.reduce((sum, ob) => sum + ob.totalPending, 0)
@@ -103,7 +91,7 @@ export async function GET(request: NextRequest) {
       dateRange: startDate && endDate ? { start: startDate, end: endDate } : undefined,
       properties: properties.map(p => ({
         id: p.id,
-        name: p.name,
+        name: p.title,
         address: p.address,
         propertyType: p.propertyType,
         status: p.status,
@@ -118,42 +106,34 @@ export async function GET(request: NextRequest) {
           phone: p.tenant.phone || undefined
         } : undefined
       })),
-      incomes: incomes.map(i => ({
-        id: i.id,
-        description: i.description,
-        amount: i.amount,
-        date: i.date.toISOString(),
-        category: i.category,
-        property: i.property ? { name: i.property.name } : undefined
-      })),
       expenses: expenses.map(e => ({
         id: e.id,
-        description: e.description,
+        description: e.description || e.title,
         amount: e.amount,
-        date: e.date.toISOString(),
+        date: e.expenseDate.toISOString(),
         category: e.category,
-        property: e.property ? { name: e.property.name } : undefined,
+        property: e.property ? { name: e.property.title } : undefined,
         paidByAdmin: e.paidByAdmin || false,
         reimbursedByOwner: e.reimbursedByOwner || false,
         reimbursedAt: e.reimbursedAt?.toISOString()
       })),
       tickets: tickets.map(t => ({
         id: t.id,
-        ticketNumber: t.ticketNumber,
-        subject: t.subject,
+        ticketNumber: t.id.slice(-6).toUpperCase(), // Usar últimos 6 caracteres del ID como número
+        subject: t.title,
         status: t.status,
         priority: t.priority,
         createdAt: t.createdAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),
-        property: t.property ? { name: t.property.name } : undefined,
+        property: t.property ? { name: t.property.title } : undefined,
         user: t.user ? { name: t.user.name, email: t.user.email } : undefined
       })),
       ownerBalances: ownerBalances,
       summary: {
         totalProperties: properties.length,
-        totalIncome,
+        totalIncome: 0, // No hay modelo Income
         totalExpenses,
-        netIncome: totalIncome - totalExpenses,
+        netIncome: -totalExpenses,
         totalTickets: tickets.length,
         openTickets,
         totalPendingExpenses,
@@ -193,7 +173,8 @@ async function getOwnerBalances() {
       phone: true,
       properties: {
         select: {
-          id: true
+          id: true,
+          title: true
         }
       }
     }
@@ -210,10 +191,9 @@ async function getOwnerBalances() {
     },
     include: {
       property: {
-        include: {
-          owner: {
-            select: { id: true }
-          }
+        select: {
+          id: true,
+          title: true
         }
       }
     }
@@ -228,10 +208,9 @@ async function getOwnerBalances() {
     },
     include: {
       property: {
-        include: {
-          owner: {
-            select: { id: true }
-          }
+        select: {
+          id: true,
+          title: true
         }
       }
     }
@@ -239,11 +218,6 @@ async function getOwnerBalances() {
 
   // Get all owner payments
   const ownerPayments = await prisma.ownerPayment.findMany({
-    include: {
-      owner: {
-        select: { id: true }
-      }
-    },
     orderBy: { paymentDate: 'desc' }
   })
 
@@ -255,13 +229,13 @@ async function getOwnerBalances() {
       .filter(e => ownerPropertyIds.includes(e.propertyId))
       .map(e => ({
         id: e.id,
-        description: e.description,
+        description: e.description || e.title,
         amount: e.amount,
-        date: e.date.toISOString(),
+        date: e.expenseDate.toISOString(),
         category: e.category,
         paidByAdmin: true,
         reimbursedByOwner: false,
-        property: e.property ? { name: e.property.name } : undefined
+        property: e.property ? { name: e.property.title } : undefined
       }))
     
     const totalPending = ownerPendingExpenses.reduce((sum, e) => sum + e.amount, 0)
@@ -278,7 +252,7 @@ async function getOwnerBalances() {
         paymentMethod: p.paymentMethod || undefined,
         referenceNumber: p.referenceNumber || undefined,
         notes: p.notes || undefined,
-        owner: { name: owner.name, email: owner.email }
+        owner: { name: owner.name || 'Sin nombre', email: owner.email }
       }))
     
     const totalPayments = ownerPaymentsList.reduce((sum, p) => sum + p.amount, 0)
