@@ -14,12 +14,17 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const ownerId = searchParams.get('ownerId')
+    
+    // Si es propietario, solo puede ver sus propios datos
+    const effectiveOwnerId = session.user.role === 'PROPIETARIO' 
+      ? session.user.id 
+      : ownerId
 
     // Get all owners with their properties
     const owners = await prisma.user.findMany({
       where: {
         role: 'PROPIETARIO',
-        ...(ownerId ? { id: ownerId } : {})
+        ...(effectiveOwnerId ? { id: effectiveOwnerId } : {})
       },
       select: {
         id: true,
@@ -73,7 +78,7 @@ export async function GET(request: NextRequest) {
 
     // Get all owner payments
     const ownerPayments = await prisma.ownerPayment.findMany({
-      where: ownerId ? { ownerId } : {},
+      where: effectiveOwnerId ? { ownerId: effectiveOwnerId } : {},
       orderBy: { paymentDate: 'desc' }
     })
 
