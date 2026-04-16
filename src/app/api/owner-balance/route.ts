@@ -7,7 +7,7 @@ import { authOptions } from '@/lib/auth'
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
         name: true,
         email: true,
         phone: true,
-        properties: {
+        propertiesAsOwner: {
           select: {
             id: true,
             title: true
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const propertyIds = owners.flatMap(o => o.properties.map(p => p.id))
+    const propertyIds = owners.flatMap(o => o.propertiesAsOwner.map(p => p.id))
 
     // Get pending expenses (paid by admin, not reimbursed)
     const pendingExpenses = await prisma.expense.findMany({
@@ -77,10 +77,10 @@ export async function GET(request: NextRequest) {
       orderBy: { paymentDate: 'desc' }
     })
 
-    // Build balance for each owner - MATCHING YOUR PAGE STRUCTURE
+    // Build balance for each owner
     const ownersData = owners.map(owner => {
-      const ownerPropertyIds = owner.properties.map(p => p.id)
-      
+      const ownerPropertyIds = owner.propertiesAsOwner.map(p => p.id)
+
       // Pending expenses for this owner
       const ownerPendingExpenses = pendingExpenses
         .filter(e => ownerPropertyIds.includes(e.propertyId))
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
             title: e.property?.title || 'N/A'
           }
         }))
-      
+
       // Reimbursed expenses for this owner
       const ownerReimbursedExpenses = reimbursedExpenses
         .filter(e => ownerPropertyIds.includes(e.propertyId))
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
           },
           reimbursedAt: e.reimbursedAt?.toISOString() || null
         }))
-      
+
       // Owner payments
       const ownerPaymentsList = ownerPayments
         .filter(p => p.ownerId === owner.id)
@@ -123,12 +123,12 @@ export async function GET(request: NextRequest) {
           reference: p.referenceNumber,
           notes: p.notes
         }))
-      
+
       // Calculate totals
       const pending = ownerPendingExpenses.reduce((sum, e) => sum + e.amount, 0)
       const reimbursed = ownerReimbursedExpenses.reduce((sum, e) => sum + e.amount, 0)
       const payments = ownerPaymentsList.reduce((sum, p) => sum + p.amount, 0)
-      
+
       // Balance = payments - pending (positive = owner has credit, negative = owner owes)
       const balance = payments - pending
 
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
           name: owner.name || 'Sin nombre',
           email: owner.email,
           phone: owner.phone,
-          propertiesCount: owner.properties.length
+          propertiesCount: owner.propertiesAsOwner.length
         },
         pendingExpenses: ownerPendingExpenses,
         reimbursedExpenses: ownerReimbursedExpenses,
@@ -160,16 +160,15 @@ export async function GET(request: NextRequest) {
       totalBalance: ownersData.reduce((sum, o) => sum + o.totals.balance, 0)
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      data: { 
+    return NextResponse.json({
+      success: true,
+      data: {
         owners: ownersData,
-        totals 
-      } 
+        totals
+      }
     })
   } catch (error) {
     console.error('Error fetching owner balances:', error)
     return NextResponse.json({ error: 'Error al obtener balances' }, { status: 500 })
   }
 }
-
