@@ -8,7 +8,7 @@ import { format } from 'date-fns'
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
@@ -47,8 +47,8 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { title: 'asc' }
       }),
-      
-      // Expenses - CORREGIDO: usar expenseDate
+
+      // Expenses
       prisma.expense.findMany({
         where: startDate && endDate ? { expenseDate: expenseDateFilter } : {},
         include: {
@@ -58,8 +58,8 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { expenseDate: 'desc' }
       }),
-      
-      // Tickets - CORREGIDO: usar supportTicket
+
+      // Tickets
       prisma.supportTicket.findMany({
         include: {
           property: {
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
     // Calculate summary
     const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0)
     const openTickets = tickets.filter(t => t.status === 'ABIERTO' || t.status === 'EN_PROCESO').length
-    
+
     // Calculate owner balance summary
     const totalPendingExpenses = ownerBalances.reduce((sum, ob) => sum + ob.totalPending, 0)
     const totalOwnerPayments = ownerBalances.reduce((sum, ob) => sum + ob.totalPayments, 0)
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
       })),
       tickets: tickets.map(t => ({
         id: t.id,
-        ticketNumber: t.id.slice(-6).toUpperCase(), // Usar últimos 6 caracteres del ID como número
+        ticketNumber: t.id.slice(-6).toUpperCase(),
         subject: t.title,
         status: t.status,
         priority: t.priority,
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
       ownerBalances: ownerBalances,
       summary: {
         totalProperties: properties.length,
-        totalIncome: 0, // No hay modelo Income
+        totalIncome: 0,
         totalExpenses,
         netIncome: -totalExpenses,
         totalTickets: tickets.length,
@@ -171,7 +171,7 @@ async function getOwnerBalances() {
       name: true,
       email: true,
       phone: true,
-      properties: {
+      propertiesAsOwner: {
         select: {
           id: true,
           title: true
@@ -180,7 +180,7 @@ async function getOwnerBalances() {
     }
   })
 
-  const propertyIds = owners.flatMap(o => o.properties.map(p => p.id))
+  const propertyIds = owners.flatMap(o => o.propertiesAsOwner.map(p => p.id))
 
   // Get pending expenses (paid by admin, not reimbursed) for all properties
   const pendingExpenses = await prisma.expense.findMany({
@@ -223,8 +223,8 @@ async function getOwnerBalances() {
 
   // Build balance for each owner
   return owners.map(owner => {
-    const ownerPropertyIds = owner.properties.map(p => p.id)
-    
+    const ownerPropertyIds = owner.propertiesAsOwner.map(p => p.id)
+
     const ownerPendingExpenses = pendingExpenses
       .filter(e => ownerPropertyIds.includes(e.propertyId))
       .map(e => ({
@@ -237,12 +237,12 @@ async function getOwnerBalances() {
         reimbursedByOwner: false,
         property: e.property ? { name: e.property.title } : undefined
       }))
-    
+
     const totalPending = ownerPendingExpenses.reduce((sum, e) => sum + e.amount, 0)
-    
+
     const ownerReimbursed = reimbursedExpenses.filter(e => ownerPropertyIds.includes(e.propertyId))
     const totalReimbursed = ownerReimbursed.reduce((sum, e) => sum + e.amount, 0)
-    
+
     const ownerPaymentsList = ownerPayments
       .filter(p => p.ownerId === owner.id)
       .map(p => ({
@@ -254,9 +254,9 @@ async function getOwnerBalances() {
         notes: p.notes || undefined,
         owner: { name: owner.name || 'Sin nombre', email: owner.email }
       }))
-    
+
     const totalPayments = ownerPaymentsList.reduce((sum, p) => sum + p.amount, 0)
-    
+
     // Balance = payments - pending (positive = owner has credit, negative = owner owes)
     const balance = totalPayments - totalPending
 
