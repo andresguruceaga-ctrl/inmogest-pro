@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
+import { signIn } from 'next-auth/react'
 import { Building, Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -24,28 +25,29 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
       })
 
-      const data = await response.json()
-
-      if (data.success && data.user) {
-        setUser({
-          id: data.user.id,
-          name: data.user.name,
-          email: data.user.email,
-          role: data.user.role as 'admin' | 'propietario' | 'inquilino',
-          phone: data.user.phone,
-          avatar: data.user.avatar,
-        })
-        router.push('/')
+      if (result?.error) {
+        setError(result.error)
       } else {
-        setError(data.error || 'Credenciales incorrectas')
+        // Fetch the session to get user data
+        const response = await fetch('/api/auth/session')
+        const session = await response.json()
+        
+        if (session?.user) {
+          setUser({
+            id: session.user.id,
+            name: session.user.name,
+            email: session.user.email,
+            role: session.user.role?.toLowerCase() as 'admin' | 'propietario' | 'inquilino',
+            avatar: session.user.avatar,
+          })
+          router.push('/')
+        }
       }
     } catch (err) {
       console.error('Error en login:', err)
@@ -71,7 +73,7 @@ export default function LoginPage() {
       {/* Login Card */}
       <Card className="w-full max-w-md bg-white/95 backdrop-blur shadow-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
+          <CardTitle className="text-2xl">Iniciar Sesion</CardTitle>
           <CardDescription>
             Ingresa a tu cuenta para continuar
           </CardDescription>
@@ -79,7 +81,7 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Correo electrónico</Label>
+              <Label htmlFor="email">Correo electronico</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -93,15 +95,15 @@ export default function LoginPage() {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
+              <Label htmlFor="password">Contrasena</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
+                  placeholder="********"
                   className="pl-9 pr-9"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -127,12 +129,12 @@ export default function LoginPage() {
               {loading ? (
                 <span className="flex items-center gap-2">
                   <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Iniciando sesión...
+                  Iniciando sesion...
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
                   <LogIn className="h-4 w-4" />
-                  Iniciar Sesión
+                  Iniciar Sesion
                 </span>
               )}
             </Button>
@@ -142,7 +144,7 @@ export default function LoginPage() {
 
       {/* Footer */}
       <p className="mt-8 text-sm text-white/40 text-center">
-        © 2025 InmoGest Pro. Plataforma de administración inmobiliaria para Panamá.
+        2025 InmoGest Pro. Plataforma de administracion inmobiliaria para Panama.
       </p>
     </div>
   )
