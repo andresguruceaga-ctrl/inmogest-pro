@@ -2,397 +2,368 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { startOfMonth, endOfMonth, startOfYear, endOfYear, format, subMonths } from 'date-fns'
+import { startOfMonth, endOfMonth, startOfYear, endOfYear, format, subMonths, subYears } from 'date-fns'
 
-// GET /api/reports - Obtener datos para reportes
+const months = [
+  { value: 1, label: 'Enero' },
+  { value: 2, label: 'Febrero' },
+  { value: 3, label: 'Marzo' },
+  { value: 4, label: 'Abril' },
+  { value: 5, label: 'Mayo' },
+  { value: 6, label: 'Junio' },
+  { value: 7, label: 'Julio' },
+  { value: 8, label: 'Agosto' },
+  { value: 9, label: 'Septiembre' },
+  { value: 10, label: 'Octubre' },
+  { value: 11, label: 'Noviembre' },
+  { value: 12, label: 'Diciembre' },
+]
+
+const categoryLabels: Record<string, string> = {
+  MANTENIMIENTO_PH: 'Mantenimiento PH',
+  SEGURO: 'Seguro',
+  SERVICIOS_BASICOS: 'Servicios Básicos',
+  REPARACION: 'Reparación',
+  SERVICIO_TECNICO: 'Servicio Técnico',
+  IMPUESTOS: 'Impuestos',
+  COMISION_ADMIN: 'Comisión Admin',
+  OTROS: 'Otros',
+}
+
+// GET /api/reports - Generar reportes financieros
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     
     if (!session?.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+      return NextResponse.json({ error: 'No autorizado', success: false }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type') || 'summary'
-    const startDate = searchParams.get('startDate')
-    const endDate = searchParams.get('endDate')
+    const period = searchParams.get('period') || 'monthly'
+    const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()))
+    const month = searchParams.get('month') ? parseInt(searchParams.get('month')!) : new Date().getMonth() + 1
     const ownerId = searchParams.get('ownerId')
+    const propertyId = searchParams.get('propertyId')
 
     // Si es propietario, solo puede ver sus propios datos
     const effectiveOwnerId = session.user.role === 'PROPIETARIO' 
       ? session.user.id 
-      : ownerId
+      : (ownerId && ownerId !== 'all' ? ownerId : null)
 
-    switch (type) {
-      case 'summary':
-        return await getSummaryReport(startDate, endDate)
-      case 'occupancy':
-        return await getOccupancyReport(startDate, endDate)
-      case 'income':
-        return await getIncomeReport(startDate, endDate, effectiveOwnerId)
-      case 'expenses':
-        return await getExpensesReport(startDate, endDate, effectiveOwnerId)
-      case 'owner-balances':
-        return await getOwnerBalances(effectiveOwnerId)
-      case 'collections':
-        return await getCollectionsReport(startDate, endDate, effectiveOwnerId)
-      default:
-        return NextResponse.json({ error: 'Tipo de reporte no válido' }, { status: 400 })
+    // Determinar rango de fechas
+    let startDate: Date
+    let endDate: Date
+
+    if (period === 'monthly') {
+      startDate = startOfMonth(new Date(year, month - 1, 1))
+      endDate = endOfMonth(new Date(year, month - 1, 1))
+    } else {
+      startDate = startOfYear(new Date(year, 0, 1))
+      endDate = endOfYear(new Date(year, 0, 1))
     }
-  } catch (error) {
-    console.error('Error en reportes:', error)
-    return NextResponse.json(
-      { error: 'Error al generar el reporte' },
-      { status: 500 }
-    )
-  }
-}
 
-async function getSummaryReport(startDate?: string | null, endDate?: string | null) {
-  const start = startDate ? new Date(startDate) : startOfMonth(new Date())
-  const end = endDate ? new Date(endDate) : endOfMonth(new Date())
-
-  const [
-    totalProperties,
-    activeContracts,
-    totalTenants,
-    totalOwners,
-    monthlyIncome,
-    monthlyExpenses,
-    pendingInvoices
-  ] = await Promise.all([
-    prisma.property.count(),
-    prisma.contract.count({ where: { status: 'ACTIVE' } }),
-    prisma.tenant.count(),
-    prisma.owner.count(),
-    prisma.invoice.aggregate({
-      where: {
-        status: 'PAID',
-        paidDate: { gte: start, lte: end }
-      },
-      _sum: { total: true }
-    }),
-    prisma.expense.aggregate({
-      where: {
-        expenseDate: { gte: start, lte: end }
-      },
-      _sum: { amount: true }
-    }),
-    prisma.invoice.count({
-      where: { status: { in: ['PENDING', 'OVERDUE'] } }
-    })
-  ])
-
-  return NextResponse.json({
-    totalProperties,
-    activeContracts,
-    totalTenants,
-    totalOwners,
-    monthlyIncome: monthlyIncome._sum.total || 0,
-    monthlyExpenses: monthlyExpenses._sum.amount || 0,
-    pendingInvoices,
-    netIncome: (monthlyIncome._sum.total || 0) - (monthlyExpenses._sum.amount || 0)
-  })
-}
-
-async function getOccupancyReport(startDate?: string | null, endDate?: string | null) {
-  const properties = await prisma.property.findMany({
-    include: {
-      contracts: {
-        where: { status: 'ACTIVE' }
-      }
+    // Construir filtros de propiedad
+    const propertyWhere: any = {}
+    if (effectiveOwnerId) {
+      propertyWhere.ownerId = effectiveOwnerId
     }
-  })
-
-  const totalUnits = properties.length
-  const occupiedUnits = properties.filter(p => p.contracts.length > 0).length
-  const occupancyRate = totalUnits > 0 ? (occupiedUnits / totalUnits) * 100 : 0
-
-  return NextResponse.json({
-    totalUnits,
-    occupiedUnits,
-    vacantUnits: totalUnits - occupiedUnits,
-    occupancyRate: Math.round(occupancyRate * 100) / 100,
-    properties: properties.map(p => ({
-      id: p.id,
-      title: p.title,
-      address: p.address,
-      isOccupied: p.contracts.length > 0,
-      tenant: p.contracts[0]?.tenantId || null
-    }))
-  })
-}
-
-async function getIncomeReport(
-  startDate?: string | null, 
-  endDate?: string | null,
-  ownerId?: string | null
-) {
-  const start = startDate ? new Date(startDate) : startOfYear(new Date())
-  const end = endDate ? new Date(endDate) : endOfYear(new Date())
-
-  const whereClause: any = {
-    status: 'PAID',
-    paidDate: { gte: start, lte: end }
-  }
-
-  if (ownerId) {
-    whereClause.contract = {
-      property: {
-        ownerId: ownerId
-      }
+    if (propertyId && propertyId !== 'all') {
+      propertyWhere.id = propertyId
     }
-  }
 
-  const invoices = await prisma.invoice.findMany({
-    where: whereClause,
-    include: {
-      contract: {
-        include: {
-          property: true,
-          tenant: true
-        }
-      }
-    },
-    orderBy: { paidDate: 'asc' }
-  })
-
-  // Agrupar por mes
-  const monthlyData: Record<string, { month: string; total: number; count: number }> = {}
-  
-  invoices.forEach(invoice => {
-    if (invoice.paidDate) {
-      const monthKey = format(invoice.paidDate, 'yyyy-MM')
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = { month: monthKey, total: 0, count: 0 }
-      }
-      monthlyData[monthKey].total += invoice.total.toNumber()
-      monthlyData[monthKey].count++
-    }
-  })
-
-  return NextResponse.json({
-    totalIncome: invoices.reduce((sum, inv) => sum + inv.total.toNumber(), 0),
-    invoicesPaid: invoices.length,
-    monthlyBreakdown: Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month)),
-    invoices: invoices.map(inv => ({
-      id: inv.id,
-      amount: inv.total,
-      date: inv.paidDate,
-      property: inv.contract?.property?.title || 'N/A',
-      tenant: inv.contract?.tenant?.name || 'N/A'
-    }))
-  })
-}
-
-async function getExpensesReport(
-  startDate?: string | null, 
-  endDate?: string | null,
-  ownerId?: string | null
-) {
-  const start = startDate ? new Date(startDate) : startOfYear(new Date())
-  const end = endDate ? new Date(endDate) : endOfYear(new Date())
-
-  const whereClause: any = {
-    expenseDate: { gte: start, lte: end }
-  }
-
-  if (ownerId) {
-    whereClause.property = {
-      ownerId: ownerId
-    }
-  }
-
-  const expenses = await prisma.expense.findMany({
-    where: whereClause,
-    include: {
-      property: true,
-      category: true
-    },
-    orderBy: { expenseDate: 'asc' }
-  })
-
-  // Agrupar por categoría
-  const categoryData: Record<string, { category: string; total: number; count: number }> = {}
-  
-  expenses.forEach(expense => {
-    const categoryKey = expense.category?.name || 'Sin categoría'
-    if (!categoryData[categoryKey]) {
-      categoryData[categoryKey] = { category: categoryKey, total: 0, count: 0 }
-    }
-    categoryData[categoryKey].total += expense.amount.toNumber()
-    categoryData[categoryKey].count++
-  })
-
-  // Agrupar por mes
-  const monthlyData: Record<string, { month: string; total: number }> = {}
-  
-  expenses.forEach(expense => {
-    if (expense.expenseDate) {
-      const monthKey = format(expense.expenseDate, 'yyyy-MM')
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = { month: monthKey, total: 0 }
-      }
-      monthlyData[monthKey].total += expense.amount.toNumber()
-    }
-  })
-
-  return NextResponse.json({
-    totalExpenses: expenses.reduce((sum, exp) => sum + exp.amount.toNumber(), 0),
-    expenseCount: expenses.length,
-    categoryBreakdown: Object.values(categoryData),
-    monthlyBreakdown: Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month)),
-    expenses: expenses.map(exp => ({
-      id: exp.id,
-      description: exp.description,
-      amount: exp.amount,
-      date: exp.expenseDate,
-      category: exp.category?.name || 'Sin categoría',
-      property: exp.property?.title || 'General',
-      paidByAdmin: exp.paidByAdmin,
-      reimbursedByOwner: exp.reimbursedByOwner
-    }))
-  })
-}
-
-async function getOwnerBalances(ownerId?: string | null) {
-  // Obtener propietarios con sus propiedades y gastos
-  const whereClause = ownerId ? { id: ownerId } : {}
-  
-  const owners = await prisma.owner.findMany({
-    where: whereClause,
-    include: {
-      propertiesAsOwner: {
-        select: {
-          id: true,
-          title: true
-        }
-      },
-      ownerPayments: {
-        orderBy: { paymentDate: 'desc' },
-        take: 10
-      }
-    }
-  })
-
-  const ownerBalances = await Promise.all(
-    owners.map(async (owner) => {
-      // Obtener propiedades del propietario
-      const properties = await prisma.property.findMany({
-        where: { ownerId: owner.id },
-        select: { id: true }
-      })
-      const propertyIds = properties.map(p => p.id)
-
-      // Calcular gastos pendientes de reembolso
-      const pendingExpenses = await prisma.expense.aggregate({
-        where: {
-          propertyId: { in: propertyIds },
-          paidByAdmin: true,
-          reimbursedByOwner: false
+    // Obtener propiedades
+    const properties = await prisma.property.findMany({
+      where: propertyWhere,
+      include: {
+        owner: {
+          select: { id: true, name: true }
         },
-        _sum: { amount: true }
-      })
-
-      // Calcular total pagado por el propietario
-      const totalPaid = await prisma.ownerPayment.aggregate({
-        where: { ownerId: owner.id },
-        _sum: { amount: true }
-      })
-
-      // Ingresos por alquiler (contratos activos)
-      const activeContracts = await prisma.contract.findMany({
-        where: {
-          propertyId: { in: propertyIds },
-          status: 'ACTIVE'
-        },
-        select: { monthlyRent: true }
-      })
-
-      const monthlyIncome = activeContracts.reduce(
-        (sum, c) => sum + c.monthlyRent.toNumber(),
-        0
-      )
-
-      return {
-        id: owner.id,
-        name: owner.name,
-        email: owner.email,
-        phone: owner.phone,
-        properties: owner.propertiesAsOwner,
-        pendingBalance: pendingExpenses._sum.amount || 0,
-        totalPaid: totalPaid._sum.amount || 0,
-        monthlyIncome,
-        netBalance: monthlyIncome - (pendingExpenses._sum.amount?.toNumber() || 0) - (totalPaid._sum.amount?.toNumber() || 0),
-        recentPayments: owner.ownerPayments.map(p => ({
-          id: p.id,
-          amount: p.amount,
-          date: p.paymentDate,
-          method: p.paymentMethod,
-          reference: p.reference
-        }))
-      }
-    })
-  )
-
-  return NextResponse.json({
-    owners: ownerBalances,
-    summary: {
-      totalOwners: ownerBalances.length,
-      totalPending: ownerBalances.reduce((sum, o) => sum + o.pendingBalance.toNumber(), 0),
-      totalMonthlyIncome: ownerBalances.reduce((sum, o) => sum + o.monthlyIncome, 0)
-    }
-  })
-}
-
-async function getCollectionsReport(
-  startDate?: string | null, 
-  endDate?: string | null,
-  ownerId?: string | null
-) {
-  const start = startDate ? new Date(startDate) : startOfMonth(new Date())
-  const end = endDate ? new Date(endDate) : endOfMonth(new Date())
-
-  const whereClause: any = {
-    paymentDate: { gte: start, lte: end }
-  }
-
-  // Filtrar por propietario si se especifica
-  if (ownerId) {
-    whereClause.ownerId = ownerId
-  }
-
-  const payments = await prisma.ownerPayment.findMany({
-    where: whereClause,
-    include: {
-      owner: {
-        include: {
-          propertiesAsOwner: {
-            select: { id: true, title: true }
+        contracts: {
+          where: { status: 'ACTIVE' },
+          include: {
+            tenant: { select: { id: true, name: true } }
           }
         }
       }
-    },
-    orderBy: { paymentDate: 'desc' }
-  })
+    })
 
-  const totalCollected = payments.reduce((sum, p) => sum + p.amount.toNumber(), 0)
+    if (properties.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          period: {
+            type: period,
+            month: period === 'monthly' ? month : undefined,
+            year,
+            monthName: period === 'monthly' ? months.find(m => m.value === month)?.label : undefined
+          },
+          properties: [],
+          totals: {
+            grossIncome: 0,
+            fixedExpenses: 0,
+            variableExpenses: 0,
+            totalExpenses: 0,
+            netIncome: 0,
+            itbmsCollected: 0,
+            itbmsPaid: 0,
+            propertiesCount: 0
+          },
+          generated: true,
+          tickets: []
+        }
+      })
+    }
 
-  return NextResponse.json({
-    totalCollected,
-    paymentCount: payments.length,
-    payments: payments.map(p => ({
-      id: p.id,
-      amount: p.amount,
-      date: p.paymentDate,
-      method: p.paymentMethod,
-      reference: p.reference,
-      owner: {
-        id: p.owner.id,
-        name: p.owner.name,
-        properties: p.owner.propertiesAsOwner
+    const propertyIds = properties.map(p => p.id)
+
+    // Obtener gastos del período
+    const expenses = await prisma.expense.findMany({
+      where: {
+        propertyId: { in: propertyIds },
+        expenseDate: { gte: startDate, lte: endDate }
+      },
+      include: {
+        category: true,
+        property: { select: { id: true, title: true } }
+      },
+      orderBy: { expenseDate: 'desc' }
+    })
+
+    // Obtener pagos/facturas del período
+    const invoices = await prisma.invoice.findMany({
+      where: {
+        status: 'PAID',
+        paidDate: { gte: startDate, lte: endDate },
+        contract: {
+          propertyId: { in: propertyIds }
+        }
+      },
+      include: {
+        contract: {
+          include: {
+            property: { select: { id: true, title: true } },
+            tenant: { select: { id: true, name: true } }
+          }
+        }
+      },
+      orderBy: { paidDate: 'desc' }
+    })
+
+    // Obtener tickets del período
+    const tickets = await prisma.serviceRequest.findMany({
+      where: {
+        propertyId: { in: propertyIds },
+        createdAt: { gte: startDate, lte: endDate }
+      },
+      include: {
+        property: { select: { id: true, title: true, address: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    // Procesar datos por propiedad
+    const propertiesData = properties.map(property => {
+      const propertyExpenses = expenses.filter(e => e.propertyId === property.id)
+      const propertyInvoices = invoices.filter(i => i.contract?.propertyId === property.id)
+      
+      // Clasificar gastos
+      const fixedExpensesList = propertyExpenses.filter(e => 
+        ['MANTENIMIENTO_PH', 'SEGURO', 'IMPUESTOS', 'COMISION_ADMIN'].includes(e.categoryId || '')
+      )
+      const variableExpensesList = propertyExpenses.filter(e => 
+        ['SERVICIOS_BASICOS', 'REPARACION', 'SERVICIO_TECNICO', 'OTROS'].includes(e.categoryId || '')
+      )
+
+      const fixedExpenses = fixedExpensesList.reduce((sum, e) => sum + e.amount.toNumber(), 0)
+      const variableExpenses = variableExpensesList.reduce((sum, e) => sum + e.amount.toNumber(), 0)
+      const grossIncome = propertyInvoices.reduce((sum, i) => sum + i.total.toNumber(), 0)
+      const monthlyRent = property.contracts[0]?.monthlyRent?.toNumber() || 0
+
+      return {
+        propertyId: property.id,
+        propertyTitle: property.title,
+        address: property.address,
+        province: property.province || '',
+        monthlyRent,
+        grossIncome,
+        fixedExpenses,
+        variableExpenses,
+        totalExpenses: fixedExpenses + variableExpenses,
+        netIncome: grossIncome - fixedExpenses - variableExpenses,
+        itbmsCollected: propertyInvoices.reduce((sum, i) => sum + (i.itbms?.toNumber() || 0), 0),
+        itbmsPaid: propertyExpenses.reduce((sum, e) => sum + (e.itbms?.toNumber() || 0), 0),
+        occupancyRate: property.contracts.length > 0 ? 100 : 0,
+        paymentsCount: propertyInvoices.length,
+        expensesCount: propertyExpenses.length,
+        owner: property.owner,
+        expensesDetails: {
+          fixed: fixedExpensesList.map(e => ({
+            id: e.id,
+            description: e.description,
+            amount: e.amount.toNumber(),
+            date: e.expenseDate.toISOString(),
+            category: e.categoryId || 'OTROS'
+          })),
+          variable: variableExpensesList.map(e => ({
+            id: e.id,
+            description: e.description,
+            amount: e.amount.toNumber(),
+            date: e.expenseDate.toISOString(),
+            category: e.categoryId || 'OTROS'
+          }))
+        },
+        paymentsDetails: propertyInvoices.map(i => ({
+          id: i.id,
+          amount: i.total.toNumber(),
+          date: i.paidDate?.toISOString() || '',
+          type: 'Alquiler',
+          tenant: i.contract?.tenant?.name
+        }))
       }
-    }))
-  })
+    })
+
+    // Calcular totales
+    const totals = {
+      grossIncome: propertiesData.reduce((sum, p) => sum + p.grossIncome, 0),
+      fixedExpenses: propertiesData.reduce((sum, p) => sum + p.fixedExpenses, 0),
+      variableExpenses: propertiesData.reduce((sum, p) => sum + p.variableExpenses, 0),
+      totalExpenses: propertiesData.reduce((sum, p) => sum + p.totalExpenses, 0),
+      netIncome: propertiesData.reduce((sum, p) => sum + p.netIncome, 0),
+      itbmsCollected: propertiesData.reduce((sum, p) => sum + p.itbmsCollected, 0),
+      itbmsPaid: propertiesData.reduce((sum, p) => sum + p.itbmsPaid, 0),
+      propertiesCount: properties.length,
+      avgOccupancy: propertiesData.reduce((sum, p) => sum + p.occupancyRate, 0) / properties.length,
+      avgMonthlyIncome: propertiesData.reduce((sum, p) => sum + p.monthlyRent, 0) / properties.length
+    }
+
+    // Datos mensuales (para reporte anual)
+    let monthlyData = undefined
+    if (period === 'yearly') {
+      monthlyData = []
+      for (let m = 1; m <= 12; m++) {
+        const monthStart = startOfMonth(new Date(year, m - 1, 1))
+        const monthEnd = endOfMonth(new Date(year, m - 1, 1))
+        
+        const monthExpenses = await prisma.expense.aggregate({
+          where: {
+            propertyId: { in: propertyIds },
+            expenseDate: { gte: monthStart, lte: monthEnd }
+          },
+          _sum: { amount: true }
+        })
+        
+        const monthInvoices = await prisma.invoice.aggregate({
+          where: {
+            status: 'PAID',
+            paidDate: { gte: monthStart, lte: monthEnd },
+            contract: { propertyId: { in: propertyIds } }
+          },
+          _sum: { total: true }
+        })
+
+        const monthGross = monthInvoices._sum.total?.toNumber() || 0
+        const monthExpensesTotal = monthExpenses._sum.amount?.toNumber() || 0
+
+        monthlyData.push({
+          month: m,
+          monthName: months.find(mo => mo.value === m)?.label || '',
+          grossIncome: monthGross,
+          fixedExpenses: monthExpensesTotal * 0.4, // Aproximación
+          variableExpenses: monthExpensesTotal * 0.6, // Aproximación
+          totalExpenses: monthExpensesTotal,
+          netIncome: monthGross - monthExpensesTotal
+        })
+      }
+    }
+
+    // Comparación con período anterior
+    let comparison = undefined
+    let previousStart: Date
+    let previousEnd: Date
+
+    if (period === 'monthly') {
+      previousStart = startOfMonth(subMonths(startDate, 1))
+      previousEnd = endOfMonth(subMonths(startDate, 1))
+    } else {
+      previousStart = startOfYear(subYears(startDate, 1))
+      previousEnd = endOfYear(subYears(startDate, 1))
+    }
+
+    const prevExpenses = await prisma.expense.aggregate({
+      where: {
+        propertyId: { in: propertyIds },
+        expenseDate: { gte: previousStart, lte: previousEnd }
+      },
+      _sum: { amount: true }
+    })
+
+    const prevInvoices = await prisma.invoice.aggregate({
+      where: {
+        status: 'PAID',
+        paidDate: { gte: previousStart, lte: previousEnd },
+        contract: { propertyId: { in: propertyIds } }
+      },
+      _sum: { total: true }
+    })
+
+    const prevGross = prevInvoices._sum.total?.toNumber() || 0
+    const prevExpensesTotal = prevExpenses._sum.amount?.toNumber() || 0
+    const prevNet = prevGross - prevExpensesTotal
+
+    comparison = {
+      previousPeriod: {
+        month: period === 'monthly' ? month - 1 : undefined,
+        year: period === 'monthly' ? (month === 1 ? year - 1 : year) : year - 1,
+        totals: {
+          grossIncome: prevGross,
+          netIncome: prevNet,
+          totalExpenses: prevExpensesTotal
+        }
+      },
+      variations: {
+        grossIncome: prevGross > 0 ? Math.round(((totals.grossIncome - prevGross) / prevGross) * 100) : 0,
+        netIncome: prevNet !== 0 ? Math.round(((totals.netIncome - prevNet) / Math.abs(prevNet)) * 100) : 0,
+        totalExpenses: prevExpensesTotal > 0 ? Math.round(((totals.totalExpenses - prevExpensesTotal) / prevExpensesTotal) * 100) : 0
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        period: {
+          type: period,
+          month: period === 'monthly' ? month : undefined,
+          year,
+          monthName: period === 'monthly' ? months.find(m => m.value === month)?.label : undefined
+        },
+        properties: propertiesData,
+        totals,
+        monthlyData,
+        comparison,
+        generated: true,
+        tickets: tickets.map(t => ({
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          category: t.category,
+          status: t.status,
+          priority: t.priority,
+          createdAt: t.createdAt.toISOString(),
+          property: {
+            id: t.property.id,
+            title: t.property.title,
+            address: t.property.address
+          }
+        }))
+      }
+    })
+
+  } catch (error) {
+    console.error('Error en reportes:', error)
+    return NextResponse.json(
+      { error: 'Error al generar el reporte', success: false },
+      { status: 500 }
+    )
+  }
 }
