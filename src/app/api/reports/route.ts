@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
           select: { id: true, name: true }
         },
         contracts: {
-          where: { status: 'ACTIVE' },
+          where: { status: 'VIGENTE' },
           include: {
             tenant: { select: { id: true, name: true } }
           }
@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
     // Obtener pagos/facturas del período
     const invoices = await db.invoice.findMany({
       where: {
-        status: 'PAID',
+        status: 'PAGADA',
         paidDate: { gte: startDate, lte: endDate },
         contract: {
           propertyId: { in: propertyIds }
@@ -255,7 +255,7 @@ export async function GET(request: NextRequest) {
         
         const monthInvoices = await db.invoice.aggregate({
           where: {
-            status: 'PAID',
+            status: 'PAGADA',
             paidDate: { gte: monthStart, lte: monthEnd },
             contract: { propertyId: { in: propertyIds } }
           },
@@ -300,7 +300,7 @@ export async function GET(request: NextRequest) {
 
     const prevInvoices = await db.invoice.aggregate({
       where: {
-        status: 'PAID',
+        status: 'PAGADA',
         paidDate: { gte: previousStart, lte: previousEnd },
         contract: { propertyId: { in: propertyIds } }
       },
