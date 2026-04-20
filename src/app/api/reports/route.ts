@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { startOfMonth, endOfMonth, startOfYear, endOfYear, format, subMonths, subYears } from 'date-fns'
+import { startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, subYears } from 'date-fns'
 
 const months = [
   { value: 1, label: 'Enero' },
@@ -18,17 +18,6 @@ const months = [
   { value: 11, label: 'Noviembre' },
   { value: 12, label: 'Diciembre' },
 ]
-
-const categoryLabels: Record<string, string> = {
-  MANTENIMIENTO_PH: 'Mantenimiento PH',
-  SEGURO: 'Seguro',
-  SERVICIOS_BASICOS: 'Servicios Básicos',
-  REPARACION: 'Reparación',
-  SERVICIO_TECNICO: 'Servicio Técnico',
-  IMPUESTOS: 'Impuestos',
-  COMISION_ADMIN: 'Comisión Admin',
-  OTROS: 'Otros',
-}
 
 // GET /api/reports - Generar reportes financieros
 export async function GET(request: NextRequest) {
@@ -117,14 +106,13 @@ export async function GET(request: NextRequest) {
 
     const propertyIds = properties.map(p => p.id)
 
-    // Obtener gastos del período
+    // Obtener gastos del período - SIN include category porque es un enum
     const expenses = await db.expense.findMany({
       where: {
         propertyId: { in: propertyIds },
         expenseDate: { gte: startDate, lte: endDate }
       },
       include: {
-        category: true,
         property: { select: { id: true, title: true } }
       },
       orderBy: { expenseDate: 'desc' }
@@ -167,18 +155,14 @@ export async function GET(request: NextRequest) {
       const propertyExpenses = expenses.filter(e => e.propertyId === property.id)
       const propertyInvoices = invoices.filter(i => i.contract?.propertyId === property.id)
       
-      // Clasificar gastos
-      const fixedExpensesList = propertyExpenses.filter(e => 
-        ['MANTENIMIENTO_PH', 'SEGURO', 'IMPUESTOS', 'COMISION_ADMIN'].includes(e.categoryId || '')
-      )
-      const variableExpensesList = propertyExpenses.filter(e => 
-        ['SERVICIOS_BASICOS', 'REPARACION', 'SERVICIO_TECNICO', 'OTROS'].includes(e.categoryId || '')
-      )
+      // Clasificar gastos por tipo (FIJO vs VARIABLE)
+      const fixedExpensesList = propertyExpenses.filter(e => e.expenseType === 'FIJO')
+      const variableExpensesList = propertyExpenses.filter(e => e.expenseType === 'VARIABLE')
 
-      const fixedExpenses = fixedExpensesList.reduce((sum, e) => sum + e.amount.toNumber(), 0)
-      const variableExpenses = variableExpensesList.reduce((sum, e) => sum + e.amount.toNumber(), 0)
-      const grossIncome = propertyInvoices.reduce((sum, i) => sum + i.total.toNumber(), 0)
-      const monthlyRent = property.contracts[0]?.monthlyRent?.toNumber() || 0
+      const fixedExpenses = fixedExpensesList.reduce((sum, e) => sum + e.totalAmount, 0)
+      const variableExpenses = variableExpensesList.reduce((sum, e) => sum + e.totalAmount, 0)
+      const grossIncome = propertyInvoices.reduce((sum, i) => sum + i.total, 0)
+      const monthlyRent = property.contracts[0]?.monthlyRent || 0
 
       return {
         propertyId: property.id,
@@ -191,8 +175,8 @@ export async function GET(request: NextRequest) {
         variableExpenses,
         totalExpenses: fixedExpenses + variableExpenses,
         netIncome: grossIncome - fixedExpenses - variableExpenses,
-        itbmsCollected: propertyInvoices.reduce((sum, i) => sum + (i.itbms?.toNumber() || 0), 0),
-        itbmsPaid: propertyExpenses.reduce((sum, e) => sum + (e.itbms?.toNumber() || 0), 0),
+        itbmsCollected: propertyInvoices.reduce((sum, i) => sum + (i.itbms || 0), 0),
+        itbmsPaid: propertyExpenses.reduce((sum, e) => sum + (e.itbmsAmount || 0), 0),
         occupancyRate: property.contracts.length > 0 ? 100 : 0,
         paymentsCount: propertyInvoices.length,
         expensesCount: propertyExpenses.length,
@@ -200,22 +184,22 @@ export async function GET(request: NextRequest) {
         expensesDetails: {
           fixed: fixedExpensesList.map(e => ({
             id: e.id,
-            description: e.description,
-            amount: e.amount.toNumber(),
+            description: e.description || e.title,
+            amount: e.totalAmount,
             date: e.expenseDate.toISOString(),
-            category: e.categoryId || 'OTROS'
+            category: e.category
           })),
           variable: variableExpensesList.map(e => ({
             id: e.id,
-            description: e.description,
-            amount: e.amount.toNumber(),
+            description: e.description || e.title,
+            amount: e.totalAmount,
             date: e.expenseDate.toISOString(),
-            category: e.categoryId || 'OTROS'
+            category: e.category
           }))
         },
         paymentsDetails: propertyInvoices.map(i => ({
           id: i.id,
-          amount: i.total.toNumber(),
+          amount: i.total,
           date: i.paidDate?.toISOString() || '',
           type: 'Alquiler',
           tenant: i.contract?.tenant?.name
@@ -250,7 +234,7 @@ export async function GET(request: NextRequest) {
             propertyId: { in: propertyIds },
             expenseDate: { gte: monthStart, lte: monthEnd }
           },
-          _sum: { amount: true }
+          _sum: { totalAmount: true }
         })
         
         const monthInvoices = await db.invoice.aggregate({
@@ -262,8 +246,8 @@ export async function GET(request: NextRequest) {
           _sum: { total: true }
         })
 
-        const monthGross = monthInvoices._sum.total?.toNumber() || 0
-        const monthExpensesTotal = monthExpenses._sum.amount?.toNumber() || 0
+        const monthGross = monthInvoices._sum.total || 0
+        const monthExpensesTotal = monthExpenses._sum.totalAmount || 0
 
         monthlyData.push({
           month: m,
@@ -295,7 +279,7 @@ export async function GET(request: NextRequest) {
         propertyId: { in: propertyIds },
         expenseDate: { gte: previousStart, lte: previousEnd }
       },
-      _sum: { amount: true }
+      _sum: { totalAmount: true }
     })
 
     const prevInvoices = await db.invoice.aggregate({
@@ -307,8 +291,8 @@ export async function GET(request: NextRequest) {
       _sum: { total: true }
     })
 
-    const prevGross = prevInvoices._sum.total?.toNumber() || 0
-    const prevExpensesTotal = prevExpenses._sum.amount?.toNumber() || 0
+    const prevGross = prevInvoices._sum.total || 0
+    const prevExpensesTotal = prevExpenses._sum.totalAmount || 0
     const prevNet = prevGross - prevExpensesTotal
 
     comparison = {
