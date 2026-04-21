@@ -339,9 +339,9 @@ export async function GET(request: NextRequest) {
             title: t.property.title,
             address: t.property.address
           }
-        }))
+        }
       }
-    })
+    }
 
   } catch (error) {
     console.error('Error en reportes:', error)
@@ -351,5 +351,6 @@ export async function GET(request: NextRequest) {
     )
   }
 }
- 
+
+ 
  
