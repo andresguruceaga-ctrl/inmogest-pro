@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { db } from '@/lib/db'
+import { prisma } from '@/lib/prisma'
 import { startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, subYears } from 'date-fns'
 
 const months = [
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Obtener propiedades
-    const properties = await db.property.findMany({
+    const properties = await prisma.property.findMany({
       where: propertyWhere,
       include: {
         owner: {
@@ -106,8 +106,8 @@ export async function GET(request: NextRequest) {
 
     const propertyIds = properties.map(p => p.id)
 
-    // Obtener gastos del período - SIN include category porque es un enum
-    const expenses = await db.expense.findMany({
+    // Obtener gastos del período
+    const expenses = await prisma.expense.findMany({
       where: {
         propertyId: { in: propertyIds },
         expenseDate: { gte: startDate, lte: endDate }
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Obtener pagos/facturas del período
-    const invoices = await db.invoice.findMany({
+    const invoices = await prisma.invoice.findMany({
       where: {
         status: 'PAGADA',
         paidDate: { gte: startDate, lte: endDate },
@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Obtener tickets del período
-    const tickets = await db.serviceRequest.findMany({
+    const tickets = await prisma.serviceRequest.findMany({
       where: {
         propertyId: { in: propertyIds },
         createdAt: { gte: startDate, lte: endDate }
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
       const propertyExpenses = expenses.filter(e => e.propertyId === property.id)
       const propertyInvoices = invoices.filter(i => i.contract?.propertyId === property.id)
       
-      // Clasificar gastos por tipo (FIJO vs VARIABLE)
+      // Clasificar gastos por tipo
       const fixedExpensesList = propertyExpenses.filter(e => e.expenseType === 'FIJO')
       const variableExpensesList = propertyExpenses.filter(e => e.expenseType === 'VARIABLE')
 
@@ -229,7 +229,7 @@ export async function GET(request: NextRequest) {
         const monthStart = startOfMonth(new Date(year, m - 1, 1))
         const monthEnd = endOfMonth(new Date(year, m - 1, 1))
         
-        const monthExpenses = await db.expense.aggregate({
+        const monthExpenses = await prisma.expense.aggregate({
           where: {
             propertyId: { in: propertyIds },
             expenseDate: { gte: monthStart, lte: monthEnd }
@@ -237,7 +237,7 @@ export async function GET(request: NextRequest) {
           _sum: { totalAmount: true }
         })
         
-        const monthInvoices = await db.invoice.aggregate({
+        const monthInvoices = await prisma.invoice.aggregate({
           where: {
             status: 'PAGADA',
             paidDate: { gte: monthStart, lte: monthEnd },
@@ -274,7 +274,7 @@ export async function GET(request: NextRequest) {
       previousEnd = endOfYear(subYears(startDate, 1))
     }
 
-    const prevExpenses = await db.expense.aggregate({
+    const prevExpenses = await prisma.expense.aggregate({
       where: {
         propertyId: { in: propertyIds },
         expenseDate: { gte: previousStart, lte: previousEnd }
@@ -282,7 +282,7 @@ export async function GET(request: NextRequest) {
       _sum: { totalAmount: true }
     })
 
-    const prevInvoices = await db.invoice.aggregate({
+    const prevInvoices = await prisma.invoice.aggregate({
       where: {
         status: 'PAGADA',
         paidDate: { gte: previousStart, lte: previousEnd },
