@@ -95,19 +95,30 @@ export default function MisContratosPage() {
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   useEffect(() => {
-    fetchContracts()
-  }, [user])
+    // Solo cargar contratos si hay un usuario con ID
+    if (user?.id) {
+      fetchContracts()
+    } else if (user === null) {
+      // Si sabemos que no hay usuario, dejar de cargar
+      setLoading(false)
+    }
+  }, [user?.id])
 
   const fetchContracts = async () => {
+    if (!user?.id) return
+    
     try {
       setLoading(true)
-      const response = await fetch(`/api/contracts?ownerId=${user?.id}`)
-      if (!response.ok) throw new Error('Error al cargar contratos')
+      const response = await fetch(`/api/contracts?ownerId=${user.id}`)
+      if (!response.ok) {
+        throw new Error('Error al cargar contratos')
+      }
       const data = await response.json()
-      setContracts(data.contracts || data)
+      setContracts(data.contracts || data || [])
     } catch (error) {
       console.error('Error:', error)
       toast.error('Error al cargar los contratos')
+      setContracts([])
     } finally {
       setLoading(false)
     }
@@ -115,9 +126,9 @@ export default function MisContratosPage() {
 
   const filteredContracts = contracts.filter((contract) => {
     const matchesSearch =
-      contract.contractNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contract.property.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      `${contract.tenant.firstName} ${contract.tenant.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
+      contract.contractNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      contract.property?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      `${contract.tenant?.firstName || ''} ${contract.tenant?.lastName || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesStatus = statusFilter === 'all' || contract.status === statusFilter
     
@@ -125,6 +136,7 @@ export default function MisContratosPage() {
   })
 
   const formatCurrency = (amount: number) => {
+    if (amount === null || amount === undefined) return '$0.00'
     return new Intl.NumberFormat('es-PA', {
       style: 'currency',
       currency: 'USD',
@@ -159,7 +171,8 @@ export default function MisContratosPage() {
     }
   }
 
-  if (loading) {
+  // Mostrar loading mientras se verifica el usuario
+  if (loading || !user) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -275,31 +288,31 @@ export default function MisContratosPage() {
                 {filteredContracts.map((contract) => (
                   <TableRow key={contract.id}>
                     <TableCell className="font-medium">
-                      {contract.contractNumber}
+                      {contract.contractNumber || 'N/A'}
                     </TableCell>
                     <TableCell>
                       <div>
-                        <div className="font-medium">{contract.property.name}</div>
+                        <div className="font-medium">{contract.property?.name || 'N/A'}</div>
                         <div className="text-sm text-muted-foreground">
-                          {contract.property.address}
+                          {contract.property?.address || ''}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div>
                         <div className="font-medium">
-                          {contract.tenant.firstName} {contract.tenant.lastName}
+                          {contract.tenant?.firstName || ''} {contract.tenant?.lastName || ''}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {contract.tenant.email}
+                          {contract.tenant?.email || ''}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      {format(new Date(contract.startDate), 'dd/MM/yyyy', { locale: es })}
+                      {contract.startDate ? format(new Date(contract.startDate), 'dd/MM/yyyy', { locale: es }) : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      {format(new Date(contract.endDate), 'dd/MM/yyyy', { locale: es })}
+                      {contract.endDate ? format(new Date(contract.endDate), 'dd/MM/yyyy', { locale: es }) : 'N/A'}
                     </TableCell>
                     <TableCell className="font-medium">
                       {formatCurrency(contract.monthlyAmount)}
@@ -356,7 +369,7 @@ export default function MisContratosPage() {
               <div className="flex items-center gap-2">
                 <Badge
                   variant="outline"
-                  className={`${statusColors[selectedContract.status]} text-base px-4 py-1`}
+                  className={`${statusColors[selectedContract.status] || ''} text-base px-4 py-1`}
                 >
                   {statusLabels[selectedContract.status] || selectedContract.status}
                 </Badge>
@@ -366,7 +379,7 @@ export default function MisContratosPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Número de Contrato</p>
-                  <p className="font-medium">{selectedContract.contractNumber}</p>
+                  <p className="font-medium">{selectedContract.contractNumber || 'N/A'}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Monto Mensual</p>
@@ -375,13 +388,13 @@ export default function MisContratosPage() {
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Fecha de Inicio</p>
                   <p className="font-medium">
-                    {format(new Date(selectedContract.startDate), 'dd/MM/yyyy', { locale: es })}
+                    {selectedContract.startDate ? format(new Date(selectedContract.startDate), 'dd/MM/yyyy', { locale: es }) : 'N/A'}
                   </p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Fecha de Fin</p>
                   <p className="font-medium">
-                    {format(new Date(selectedContract.endDate), 'dd/MM/yyyy', { locale: es })}
+                    {selectedContract.endDate ? format(new Date(selectedContract.endDate), 'dd/MM/yyyy', { locale: es }) : 'N/A'}
                   </p>
                 </div>
                 <div className="space-y-1">
@@ -399,15 +412,15 @@ export default function MisContratosPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Nombre</p>
-                    <p className="font-medium">{selectedContract.property.name}</p>
+                    <p className="font-medium">{selectedContract.property?.name || 'N/A'}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Tipo</p>
-                    <p className="font-medium">{selectedContract.property.propertyType}</p>
+                    <p className="font-medium">{selectedContract.property?.propertyType || 'N/A'}</p>
                   </div>
                   <div className="space-y-1 col-span-2">
                     <p className="text-sm text-muted-foreground">Dirección</p>
-                    <p className="font-medium">{selectedContract.property.address}</p>
+                    <p className="font-medium">{selectedContract.property?.address || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -422,16 +435,16 @@ export default function MisContratosPage() {
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Nombre</p>
                     <p className="font-medium">
-                      {selectedContract.tenant.firstName} {selectedContract.tenant.lastName}
+                      {selectedContract.tenant?.firstName || ''} {selectedContract.tenant?.lastName || ''}
                     </p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{selectedContract.tenant.email}</p>
+                    <p className="font-medium">{selectedContract.tenant?.email || 'N/A'}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Teléfono</p>
-                    <p className="font-medium">{selectedContract.tenant.phone}</p>
+                    <p className="font-medium">{selectedContract.tenant?.phone || 'N/A'}</p>
                   </div>
                 </div>
               </div>
