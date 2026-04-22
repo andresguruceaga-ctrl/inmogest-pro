@@ -1,6 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Sidebar } from '@/components/layout/sidebar'
+import { Header } from '@/components/layout/header'
+import { Footer } from '@/components/layout/footer'
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { format, isValid, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import {
@@ -35,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 import {
   Search,
   FileText,
@@ -96,6 +102,9 @@ const statusLabels: Record<string, string> = {
 }
 
 export default function MisContratosPage() {
+  const router = useRouter()
+  const [userId, setUserId] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
@@ -108,37 +117,45 @@ export default function MisContratosPage() {
     setMounted(true)
   }, [])
 
+  // Get user from localStorage
   useEffect(() => {
-    if (mounted) {
+    if (mounted && typeof window !== 'undefined') {
+      const stored = localStorage.getItem('inmogest-pro-storage')
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored)
+          const id = parsed?.state?.user?.id
+          const role = parsed?.state?.user?.role
+          setUserId(id)
+          setUserRole(role)
+          
+          // Redirect if not authenticated
+          if (!id) {
+            router.push('/login')
+            return
+          }
+        } catch (e) {
+          console.error('Error parsing store:', e)
+          router.push('/login')
+        }
+      } else {
+        router.push('/login')
+      }
+    }
+  }, [mounted, router])
+
+  useEffect(() => {
+    if (userId) {
       fetchContracts()
     }
-  }, [mounted])
+  }, [userId])
 
   const fetchContracts = async () => {
+    if (!userId) return
+    
     try {
       setLoading(true)
       
-      // Obtener usuario del localStorage con el nombre correcto del storage
-      let userId = null
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('inmogest-pro-storage')
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored)
-            userId = parsed?.state?.user?.id
-            console.log('UserId from storage:', userId)
-          } catch (e) {
-            console.error('Error parsing store:', e)
-          }
-        }
-      }
-
-      if (!userId) {
-        console.log('No userId found')
-        setLoading(false)
-        return
-      }
-
       const response = await fetch(`/api/contracts?ownerId=${userId}`)
       
       if (!response.ok) {
@@ -146,9 +163,7 @@ export default function MisContratosPage() {
       }
       
       const data = await response.json()
-      console.log('API Response:', data)
       
-      // La API devuelve { success: true, data: [...] }
       let contractsList: Contract[] = []
       if (data.success && Array.isArray(data.data)) {
         contractsList = data.data
@@ -158,7 +173,6 @@ export default function MisContratosPage() {
         contractsList = data.contracts
       }
       
-      console.log('Contracts list:', contractsList)
       setContracts(contractsList)
     } catch (error) {
       console.error('Error:', error)
@@ -228,187 +242,240 @@ export default function MisContratosPage() {
     }
   }
 
-  // No renderizar hasta que el componente esté montado
-  if (!mounted || loading) {
+  // Show loading while checking auth
+  if (!mounted || !userId) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <p className="text-muted-foreground">Cargando...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Mis Contratos</h1>
-        <p className="text-muted-foreground">
-          Consulta tus contratos de arrendamiento activos e históricos
-        </p>
-      </div>
+    <SidebarProvider>
+      <Sidebar />
+      <SidebarInset className="flex flex-col min-h-screen">
+        <Header />
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Contratos</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{contracts.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Contratos Vigentes</CardTitle>
-            <Calendar className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-500">
-              {contracts.filter((c) => c.status === 'VIGENTE').length}
+        <main className="flex-1 p-4 md:p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Mis Contratos</h1>
+                <p className="text-muted-foreground">
+                  Consulta tus contratos de arrendamiento activos e históricos
+                </p>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Contratos Vencidos</CardTitle>
-            <AlertCircle className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-500">
-              {contracts.filter((c) => c.status === 'VENCIDO').length}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filtros</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por número, propiedad o inquilino..."
-                className="pl-8"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+            {/* Stats Cards */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Contratos</p>
+                      <p className="text-2xl font-bold mt-1">{contracts.length}</p>
+                    </div>
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <FileText className="h-5 w-5 text-primary" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Contratos Vigentes</p>
+                      <p className="text-2xl font-bold mt-1 text-green-500">
+                        {contracts.filter((c) => c.status === 'VIGENTE').length}
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                      <Calendar className="h-5 w-5 text-green-500" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Contratos Vencidos</p>
+                      <p className="text-2xl font-bold mt-1 text-yellow-500">
+                        {contracts.filter((c) => c.status === 'VENCIDO').length}
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+                      <AlertCircle className="h-5 w-5 text-yellow-500" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Ingresos Mensuales</p>
+                      <p className="text-2xl font-bold mt-1 text-blue-500">
+                        {formatCurrency(contracts.reduce((sum, c) => sum + (c.monthlyAmount || 0), 0))}
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                      <FileText className="h-5 w-5 text-blue-500" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value="VIGENTE">Vigente</SelectItem>
-                <SelectItem value="VENCIDO">Vencido</SelectItem>
-                <SelectItem value="CANCELADO">Cancelado</SelectItem>
-                <SelectItem value="RENOVADO">Renovado</SelectItem>
-              </SelectContent>
-            </Select>
+
+            {/* Filters */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Filtros</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por número, propiedad o inquilino..."
+                      className="pl-8"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue placeholder="Estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los estados</SelectItem>
+                      <SelectItem value="VIGENTE">Vigente</SelectItem>
+                      <SelectItem value="VENCIDO">Vencido</SelectItem>
+                      <SelectItem value="CANCELADO">Cancelado</SelectItem>
+                      <SelectItem value="RENOVADO">Renovado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Contracts Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Lista de Contratos</CardTitle>
+                <CardDescription>
+                  {filteredContracts.length} contrato(s) encontrado(s)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex flex-col items-center gap-4">
+                      <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+                      <p className="text-muted-foreground">Cargando contratos...</p>
+                    </div>
+                  </div>
+                ) : filteredContracts.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No se encontraron contratos
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Número</TableHead>
+                        <TableHead>Propiedad</TableHead>
+                        <TableHead>Inquilino</TableHead>
+                        <TableHead>Fecha Inicio</TableHead>
+                        <TableHead>Fecha Fin</TableHead>
+                        <TableHead>Monto Mensual</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredContracts.map((contract) => (
+                        <TableRow key={contract.id}>
+                          <TableCell className="font-medium">
+                            {contract.contractNumber || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{contract.property?.title || 'N/A'}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {contract.property?.address || ''}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">
+                                {contract.tenant?.name || 'Sin inquilino'}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {contract.tenant?.email || ''}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {formatDate(contract.startDate)}
+                          </TableCell>
+                          <TableCell>
+                            {formatDate(contract.endDate)}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatCurrency(contract.monthlyAmount)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={statusColors[contract.status] || ''}
+                            >
+                              {statusLabels[contract.status] || contract.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleViewDetails(contract)}
+                                title="Ver detalles"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDownloadPDF(contract.id)}
+                                title="Descargar PDF"
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+        </main>
 
-      {/* Contracts Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Contratos</CardTitle>
-          <CardDescription>
-            {filteredContracts.length} contrato(s) encontrado(s)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filteredContracts.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No se encontraron contratos
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Número</TableHead>
-                  <TableHead>Propiedad</TableHead>
-                  <TableHead>Inquilino</TableHead>
-                  <TableHead>Fecha Inicio</TableHead>
-                  <TableHead>Fecha Fin</TableHead>
-                  <TableHead>Monto Mensual</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredContracts.map((contract) => (
-                  <TableRow key={contract.id}>
-                    <TableCell className="font-medium">
-                      {contract.contractNumber || 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{contract.property?.title || 'N/A'}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {contract.property?.address || ''}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">
-                          {contract.tenant?.name || 'Sin inquilino'}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {contract.tenant?.email || ''}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {formatDate(contract.startDate)}
-                    </TableCell>
-                    <TableCell>
-                      {formatDate(contract.endDate)}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {formatCurrency(contract.monthlyAmount)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={statusColors[contract.status] || ''}
-                      >
-                        {statusLabels[contract.status] || contract.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleViewDetails(contract)}
-                          title="Ver detalles"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDownloadPDF(contract.id)}
-                          title="Descargar PDF"
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+        <Footer />
+      </SidebarInset>
 
       {/* Details Dialog */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -474,7 +541,8 @@ export default function MisContratosPage() {
               </div>
 
               {/* Propiedad */}
-              <div className="border-t pt-4">
+              <Separator />
+              <div>
                 <h4 className="font-medium mb-3 flex items-center gap-2">
                   <Building2 className="h-4 w-4" />
                   Propiedad
@@ -496,7 +564,8 @@ export default function MisContratosPage() {
               </div>
 
               {/* Inquilino */}
-              <div className="border-t pt-4">
+              <Separator />
+              <div>
                 <h4 className="font-medium mb-3 flex items-center gap-2">
                   <User className="h-4 w-4" />
                   Inquilino
@@ -522,7 +591,7 @@ export default function MisContratosPage() {
               </div>
 
               {/* Botón Descargar */}
-              <div className="border-t pt-4 flex justify-end">
+              <div className="flex justify-end pt-4">
                 <Button
                   onClick={() => handleDownloadPDF(selectedContract.id)}
                   className="gap-2"
@@ -535,6 +604,6 @@ export default function MisContratosPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </SidebarProvider>
   )
 }
