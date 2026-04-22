@@ -11,9 +11,12 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CreditCard, Plus, ArrowUpRight, ArrowDownRight, Loader2, Upload, FileText, Image, Eye, Calendar, Building2, X, Check } from 'lucide-react'
+import { CreditCard, Plus, ArrowUpRight, ArrowDownRight, Loader2, Upload, FileText, Image, Eye, Calendar, Building2, X, Check, MoreHorizontal, Edit, Trash2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
 
 interface Payment {
@@ -58,6 +61,14 @@ const paymentMethods = [
   { value: 'TARJETA', label: 'Tarjeta de Crédito/Débito' },
 ]
 
+const statusOptions = [
+  { value: 'PENDIENTE', label: 'Pendiente' },
+  { value: 'PAGADO', label: 'Pagado' },
+  { value: 'ATRASADO', label: 'Atrasado' },
+  { value: 'PARCIAL', label: 'Parcial' },
+  { value: 'CANCELADO', label: 'Cancelado' },
+]
+
 export default function PagosPage() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [properties, setProperties] = useState<Property[]>([])
@@ -73,6 +84,7 @@ export default function PagosPage() {
   })
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
     paymentType: 'ALQUILER',
@@ -86,6 +98,32 @@ export default function PagosPage() {
     receiptImage: '',
     receiptFileName: '',
   })
+
+  // Edit state
+  const [editOpen, setEditOpen] = useState(false)
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
+  const [editFormData, setEditFormData] = useState({
+    paymentType: 'ALQUILER',
+    amount: '',
+    referenceNumber: '',
+    paymentMethod: 'TRANSFERENCIA',
+    status: 'PAGADO',
+    dueDate: '',
+    paidAt: '',
+    propertyId: '',
+    userId: '',
+    receiptImage: '',
+    receiptFileName: '',
+  })
+
+  // Delete state
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // Detail state
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -121,7 +159,7 @@ export default function PagosPage() {
     }
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -139,11 +177,19 @@ export default function PagosPage() {
       const data = await response.json()
 
       if (response.ok) {
-        setFormData({
-          ...formData,
-          receiptImage: data.data.fileUrl,
-          receiptFileName: data.data.fileName,
-        })
+        if (isEdit) {
+          setEditFormData({
+            ...editFormData,
+            receiptImage: data.data.fileUrl,
+            receiptFileName: data.data.fileName,
+          })
+        } else {
+          setFormData({
+            ...formData,
+            receiptImage: data.data.fileUrl,
+            receiptFileName: data.data.fileName,
+          })
+        }
         toast({
           title: 'Archivo subido',
           description: 'El comprobante se ha subido exitosamente.',
@@ -224,6 +270,166 @@ export default function PagosPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!editingPayment) {
+      toast({
+        title: 'Error',
+        description: 'No hay pago seleccionado para editar',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!editFormData.amount || !editFormData.dueDate || !editFormData.propertyId || !editFormData.userId) {
+      toast({
+        title: 'Error',
+        description: 'Por favor completa todos los campos requeridos',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const response = await fetch(`/api/payments/${editingPayment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentType: editFormData.paymentType,
+          amount: parseFloat(editFormData.amount),
+          referenceNumber: editFormData.referenceNumber || null,
+          paymentMethod: editFormData.paymentMethod,
+          status: editFormData.status,
+          paidAt: editFormData.paidAt || null,
+          dueDate: editFormData.dueDate,
+          receiptImage: editFormData.receiptImage || null,
+          propertyId: editFormData.propertyId,
+          userId: editFormData.userId,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast({
+          title: 'Pago actualizado',
+          description: 'El pago se ha actualizado exitosamente.',
+        })
+        setEditOpen(false)
+        setEditingPayment(null)
+        fetchData()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'No se pudo actualizar el pago',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Error de conexión',
+        variant: 'destructive',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deletingId) return
+    
+    setDeleting(true)
+
+    try {
+      const response = await fetch(`/api/payments/${deletingId}`, {
+        method: 'DELETE',
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast({
+          title: 'Pago eliminado',
+          description: 'El pago se ha eliminado exitosamente.',
+        })
+        setDeleteOpen(false)
+        setDeletingId(null)
+        fetchData()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'No se pudo eliminar el pago',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Error de conexión',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const openDetail = (payment: Payment) => {
+    setSelectedPayment(payment)
+    setDetailOpen(true)
+  }
+
+  const openEdit = (payment: Payment) => {
+    setEditingPayment(payment)
+    
+    let paidAtStr = ''
+    try {
+      if (payment.paidAt) {
+        const date = new Date(payment.paidAt)
+        if (!isNaN(date.getTime())) {
+          paidAtStr = date.toISOString().split('T')[0]
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing paidAt:', e)
+    }
+
+    let dueDateStr = ''
+    try {
+      if (payment.dueDate) {
+        const date = new Date(payment.dueDate)
+        if (!isNaN(date.getTime())) {
+          dueDateStr = date.toISOString().split('T')[0]
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing dueDate:', e)
+    }
+
+    setEditFormData({
+      paymentType: payment.paymentType || 'ALQUILER',
+      amount: String(payment.amount ?? 0),
+      referenceNumber: payment.referenceNumber || '',
+      paymentMethod: payment.paymentMethod || 'TRANSFERENCIA',
+      status: payment.status || 'PAGADO',
+      dueDate: dueDateStr,
+      paidAt: paidAtStr,
+      propertyId: payment.property?.id || '',
+      userId: payment.user?.id || '',
+      receiptImage: payment.receiptImage || '',
+      receiptFileName: '',
+    })
+    setEditOpen(true)
+  }
+
+  const openDelete = (id: string) => {
+    setDeletingId(id)
+    setDeleteOpen(true)
   }
 
   const resetForm = () => {
@@ -364,7 +570,7 @@ export default function PagosPage() {
                         <TableHead className="hidden lg:table-cell">Referencia</TableHead>
                         <TableHead>Monto</TableHead>
                         <TableHead>Estado</TableHead>
-                        <TableHead className="text-right">Comprobante</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -395,16 +601,30 @@ export default function PagosPage() {
                             {getStatusBadge(payment.status)}
                           </TableCell>
                           <TableCell className="text-right">
-                            {payment.receiptImage ? (
-                              <Button variant="ghost" size="sm" asChild>
-                                <a href={payment.receiptImage} target="_blank" rel="noopener noreferrer">
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  Ver
-                                </a>
-                              </Button>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">Sin comprobante</span>
-                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openDetail(payment)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Ver detalle
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openEdit(payment)}>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={() => openDelete(payment.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -564,7 +784,7 @@ export default function PagosPage() {
                       ref={fileInputRef}
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
-                      onChange={handleFileChange}
+                      onChange={(e) => handleFileChange(e, false)}
                       className="hidden"
                     />
                     <Button 
@@ -600,17 +820,4 @@ export default function PagosPage() {
             )}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={saving || uploading}>
-                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Registrar Pago
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </SidebarProvider>
-  )
-}
+              <Button type="button" variant="outline" onClick={() => setDialogOpen
