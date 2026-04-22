@@ -56,16 +56,26 @@ interface Contract {
   monthlyAmount: number | null
   depositAmount: number | null
   status: string
+  isActive?: boolean
+  daysRemaining?: number
+  durationMonths?: number
+  totalContractValue?: number
   property: {
     id: string
-    name: string
+    title: string
     address: string
     propertyType: string
+    monthlyRent: number
+  } | null
+  owner: {
+    id: string
+    name: string
+    email: string
+    phone: string
   } | null
   tenant: {
     id: string
-    firstName: string
-    lastName: string
+    name: string
     email: string
     phone: string
   } | null
@@ -108,14 +118,15 @@ export default function MisContratosPage() {
     try {
       setLoading(true)
       
-      // Obtener usuario del localStorage
+      // Obtener usuario del localStorage con el nombre correcto del storage
       let userId = null
       if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('app-store')
+        const stored = localStorage.getItem('inmogest-pro-storage')
         if (stored) {
           try {
             const parsed = JSON.parse(stored)
             userId = parsed?.state?.user?.id
+            console.log('UserId from storage:', userId)
           } catch (e) {
             console.error('Error parsing store:', e)
           }
@@ -123,6 +134,7 @@ export default function MisContratosPage() {
       }
 
       if (!userId) {
+        console.log('No userId found')
         setLoading(false)
         return
       }
@@ -134,17 +146,19 @@ export default function MisContratosPage() {
       }
       
       const data = await response.json()
+      console.log('API Response:', data)
       
-      // Manejar diferentes formatos de respuesta
+      // La API devuelve { success: true, data: [...] }
       let contractsList: Contract[] = []
-      if (Array.isArray(data)) {
+      if (data.success && Array.isArray(data.data)) {
+        contractsList = data.data
+      } else if (Array.isArray(data)) {
         contractsList = data
       } else if (data.contracts && Array.isArray(data.contracts)) {
         contractsList = data.contracts
-      } else if (data.data && Array.isArray(data.data)) {
-        contractsList = data.data
       }
       
+      console.log('Contracts list:', contractsList)
       setContracts(contractsList)
     } catch (error) {
       console.error('Error:', error)
@@ -159,8 +173,8 @@ export default function MisContratosPage() {
     const searchLower = searchTerm.toLowerCase()
     const matchesSearch =
       (contract.contractNumber || '').toLowerCase().includes(searchLower) ||
-      (contract.property?.name || '').toLowerCase().includes(searchLower) ||
-      `${contract.tenant?.firstName || ''} ${contract.tenant?.lastName || ''}`.toLowerCase().includes(searchLower)
+      (contract.property?.title || '').toLowerCase().includes(searchLower) ||
+      (contract.tenant?.name || '').toLowerCase().includes(searchLower)
     
     const matchesStatus = statusFilter === 'all' || contract.status === statusFilter
     
@@ -175,10 +189,10 @@ export default function MisContratosPage() {
     }).format(amount)
   }
 
-  const formatDate = (dateString: string | null | undefined) => {
+  const formatDate = (dateString: string | Date | null | undefined) => {
     if (!dateString) return 'N/A'
     try {
-      const date = parseISO(dateString)
+      const date = typeof dateString === 'string' ? parseISO(dateString) : dateString
       if (!isValid(date)) return 'N/A'
       return format(date, 'dd/MM/yyyy', { locale: es })
     } catch {
@@ -214,7 +228,7 @@ export default function MisContratosPage() {
     }
   }
 
-  // No renderizar hasta que el componente esté montado (evita hidratación incorrecta)
+  // No renderizar hasta que el componente esté montado
   if (!mounted || loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -335,7 +349,7 @@ export default function MisContratosPage() {
                     </TableCell>
                     <TableCell>
                       <div>
-                        <div className="font-medium">{contract.property?.name || 'N/A'}</div>
+                        <div className="font-medium">{contract.property?.title || 'N/A'}</div>
                         <div className="text-sm text-muted-foreground">
                           {contract.property?.address || ''}
                         </div>
@@ -344,7 +358,7 @@ export default function MisContratosPage() {
                     <TableCell>
                       <div>
                         <div className="font-medium">
-                          {contract.tenant?.firstName || ''} {contract.tenant?.lastName || ''}
+                          {contract.tenant?.name || 'Sin inquilino'}
                         </div>
                         <div className="text-sm text-muted-foreground">
                           {contract.tenant?.email || ''}
@@ -398,7 +412,7 @@ export default function MisContratosPage() {
 
       {/* Details Dialog */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalles del Contrato</DialogTitle>
             <DialogDescription>
@@ -416,6 +430,11 @@ export default function MisContratosPage() {
                 >
                   {statusLabels[selectedContract.status] || selectedContract.status}
                 </Badge>
+                {selectedContract.isActive && (
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                    Activo actualmente
+                  </Badge>
+                )}
               </div>
 
               {/* Información del Contrato */}
@@ -440,6 +459,18 @@ export default function MisContratosPage() {
                   <p className="text-sm text-muted-foreground">Depósito</p>
                   <p className="font-medium">{formatCurrency(selectedContract.depositAmount)}</p>
                 </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Días Restantes</p>
+                  <p className="font-medium">{selectedContract.daysRemaining || 0} días</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Duración</p>
+                  <p className="font-medium">{selectedContract.durationMonths || 0} meses</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Valor Total del Contrato</p>
+                  <p className="font-medium">{formatCurrency(selectedContract.totalContractValue)}</p>
+                </div>
               </div>
 
               {/* Propiedad */}
@@ -451,7 +482,7 @@ export default function MisContratosPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Nombre</p>
-                    <p className="font-medium">{selectedContract.property?.name || 'N/A'}</p>
+                    <p className="font-medium">{selectedContract.property?.title || 'N/A'}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Tipo</p>
@@ -470,22 +501,24 @@ export default function MisContratosPage() {
                   <User className="h-4 w-4" />
                   Inquilino
                 </h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Nombre</p>
-                    <p className="font-medium">
-                      {selectedContract.tenant?.firstName || ''} {selectedContract.tenant?.lastName || ''}
-                    </p>
+                {selectedContract.tenant ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Nombre</p>
+                      <p className="font-medium">{selectedContract.tenant.name || 'N/A'}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Email</p>
+                      <p className="font-medium">{selectedContract.tenant.email || 'N/A'}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Teléfono</p>
+                      <p className="font-medium">{selectedContract.tenant.phone || 'N/A'}</p>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{selectedContract.tenant?.email || 'N/A'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Teléfono</p>
-                    <p className="font-medium">{selectedContract.tenant?.phone || 'N/A'}</p>
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-muted-foreground">Sin inquilino asignado</p>
+                )}
               </div>
 
               {/* Botón Descargar */}
