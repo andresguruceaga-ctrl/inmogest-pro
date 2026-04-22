@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAppStore } from '@/lib/store'
-import { format } from 'date-fns'
+import { format, isValid, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import {
   Card,
@@ -45,30 +44,31 @@ import {
   Eye,
   Download,
   AlertCircle,
+  Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Contract {
   id: string
   contractNumber: string
-  startDate: string
-  endDate: string
-  monthlyAmount: number
-  depositAmount: number
+  startDate: string | null
+  endDate: string | null
+  monthlyAmount: number | null
+  depositAmount: number | null
   status: string
   property: {
     id: string
     name: string
     address: string
     propertyType: string
-  }
+  } | null
   tenant: {
     id: string
     firstName: string
     lastName: string
     email: string
     phone: string
-  }
+  } | null
 }
 
 const statusColors: Record<string, string> = {
@@ -86,35 +86,66 @@ const statusLabels: Record<string, string> = {
 }
 
 export default function MisContratosPage() {
-  const { user } = useAppStore()
   const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   useEffect(() => {
-    // Solo cargar contratos si hay un usuario con ID
-    if (user?.id) {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (mounted) {
       fetchContracts()
-    } else if (user === null) {
-      // Si sabemos que no hay usuario, dejar de cargar
-      setLoading(false)
     }
-  }, [user?.id])
+  }, [mounted])
 
   const fetchContracts = async () => {
-    if (!user?.id) return
-    
     try {
       setLoading(true)
-      const response = await fetch(`/api/contracts?ownerId=${user.id}`)
+      
+      // Obtener usuario del localStorage
+      let userId = null
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('app-store')
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored)
+            userId = parsed?.state?.user?.id
+          } catch (e) {
+            console.error('Error parsing store:', e)
+          }
+        }
+      }
+
+      if (!userId) {
+        setLoading(false)
+        return
+      }
+
+      const response = await fetch(`/api/contracts?ownerId=${userId}`)
+      
       if (!response.ok) {
         throw new Error('Error al cargar contratos')
       }
+      
       const data = await response.json()
-      setContracts(data.contracts || data || [])
+      
+      // Manejar diferentes formatos de respuesta
+      let contractsList: Contract[] = []
+      if (Array.isArray(data)) {
+        contractsList = data
+      } else if (data.contracts && Array.isArray(data.contracts)) {
+        contractsList = data.contracts
+      } else if (data.data && Array.isArray(data.data)) {
+        contractsList = data.data
+      }
+      
+      setContracts(contractsList)
     } catch (error) {
       console.error('Error:', error)
       toast.error('Error al cargar los contratos')
@@ -125,22 +156,34 @@ export default function MisContratosPage() {
   }
 
   const filteredContracts = contracts.filter((contract) => {
+    const searchLower = searchTerm.toLowerCase()
     const matchesSearch =
-      contract.contractNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contract.property?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      `${contract.tenant?.firstName || ''} ${contract.tenant?.lastName || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
+      (contract.contractNumber || '').toLowerCase().includes(searchLower) ||
+      (contract.property?.name || '').toLowerCase().includes(searchLower) ||
+      `${contract.tenant?.firstName || ''} ${contract.tenant?.lastName || ''}`.toLowerCase().includes(searchLower)
     
     const matchesStatus = statusFilter === 'all' || contract.status === statusFilter
     
     return matchesSearch && matchesStatus
   })
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | null | undefined) => {
     if (amount === null || amount === undefined) return '$0.00'
     return new Intl.NumberFormat('es-PA', {
       style: 'currency',
       currency: 'USD',
     }).format(amount)
+  }
+
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return 'N/A'
+    try {
+      const date = parseISO(dateString)
+      if (!isValid(date)) return 'N/A'
+      return format(date, 'dd/MM/yyyy', { locale: es })
+    } catch {
+      return 'N/A'
+    }
   }
 
   const handleViewDetails = (contract: Contract) => {
@@ -171,11 +214,11 @@ export default function MisContratosPage() {
     }
   }
 
-  // Mostrar loading mientras se verifica el usuario
-  if (loading || !user) {
+  // No renderizar hasta que el componente esté montado (evita hidratación incorrecta)
+  if (!mounted || loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
@@ -309,10 +352,10 @@ export default function MisContratosPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {contract.startDate ? format(new Date(contract.startDate), 'dd/MM/yyyy', { locale: es }) : 'N/A'}
+                      {formatDate(contract.startDate)}
                     </TableCell>
                     <TableCell>
-                      {contract.endDate ? format(new Date(contract.endDate), 'dd/MM/yyyy', { locale: es }) : 'N/A'}
+                      {formatDate(contract.endDate)}
                     </TableCell>
                     <TableCell className="font-medium">
                       {formatCurrency(contract.monthlyAmount)}
@@ -387,15 +430,11 @@ export default function MisContratosPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Fecha de Inicio</p>
-                  <p className="font-medium">
-                    {selectedContract.startDate ? format(new Date(selectedContract.startDate), 'dd/MM/yyyy', { locale: es }) : 'N/A'}
-                  </p>
+                  <p className="font-medium">{formatDate(selectedContract.startDate)}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Fecha de Fin</p>
-                  <p className="font-medium">
-                    {selectedContract.endDate ? format(new Date(selectedContract.endDate), 'dd/MM/yyyy', { locale: es }) : 'N/A'}
-                  </p>
+                  <p className="font-medium">{formatDate(selectedContract.endDate)}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Depósito</p>
