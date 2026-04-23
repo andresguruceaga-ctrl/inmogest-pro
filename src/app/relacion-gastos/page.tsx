@@ -14,10 +14,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { 
   Wallet, TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight,
-  ChevronDown, ChevronUp, Loader2, Plus, Minus, CheckCircle, Clock, Receipt
+  ChevronDown, ChevronUp, Loader2, Plus, Minus, CheckCircle, Clock, Receipt, Edit, MoreHorizontal
 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
@@ -106,9 +108,26 @@ export default function RelacionGastosPage() {
   const [reimburseDialogOpen, setReimburseDialogOpen] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<{ id: string; description: string; amount: number; ownerId: string } | null>(null)
   
+  // Edit payment dialog
+  const [editPaymentDialogOpen, setEditPaymentDialogOpen] = useState(false)
+  const [editingPayment, setEditingPayment] = useState<{ id: string; amount: number; date: string; method: string | null; reference: string | null; notes: string | null; ownerId: string } | null>(null)
+  
+  // Delete payment dialog
+  const [deletePaymentDialogOpen, setDeletePaymentDialogOpen] = useState(false)
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  
   const [paymentForm, setPaymentForm] = useState({
     amount: '',
     paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: '',
+    referenceNumber: '',
+    notes: '',
+  })
+  
+  const [editPaymentForm, setEditPaymentForm] = useState({
+    amount: '',
+    paymentDate: '',
     paymentMethod: '',
     referenceNumber: '',
     notes: '',
@@ -265,6 +284,113 @@ export default function RelacionGastosPage() {
       })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const openEditPaymentDialog = (payment: { id: string; amount: number; date: string; method: string | null; reference: string | null; notes: string | null }, ownerId: string) => {
+    setEditingPayment({ ...payment, ownerId })
+    setEditPaymentForm({
+      amount: String(payment.amount),
+      paymentDate: payment.date ? new Date(payment.date).toISOString().split('T')[0] : '',
+      paymentMethod: payment.method || '',
+      referenceNumber: payment.reference || '',
+      notes: payment.notes || '',
+    })
+    setEditPaymentDialogOpen(true)
+  }
+
+  const handleEditPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!editingPayment || !editPaymentForm.amount) {
+      toast({
+        title: 'Error',
+        description: 'Por favor completa todos los campos requeridos',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setSaving(true)
+    try {
+      const response = await fetch(`/api/owner-payments/${editingPayment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(editPaymentForm.amount),
+          paymentDate: editPaymentForm.paymentDate,
+          paymentMethod: editPaymentForm.paymentMethod || null,
+          referenceNumber: editPaymentForm.referenceNumber || null,
+          notes: editPaymentForm.notes || null,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        toast({
+          title: 'Pago actualizado',
+          description: 'El pago se ha actualizado exitosamente.',
+        })
+        setEditPaymentDialogOpen(false)
+        fetchData()
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'No se pudo actualizar el pago',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Error de conexión',
+        variant: 'destructive',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const openDeletePaymentDialog = (paymentId: string) => {
+    setDeletingPaymentId(paymentId)
+    setDeletePaymentDialogOpen(true)
+  }
+
+  const handleDeletePayment = async () => {
+    if (!deletingPaymentId) return
+
+    setDeleting(true)
+    try {
+      const response = await fetch(`/api/owner-payments/${deletingPaymentId}`, {
+        method: 'DELETE',
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        toast({
+          title: 'Pago eliminado',
+          description: 'El pago se ha eliminado exitosamente.',
+        })
+        setDeletePaymentDialogOpen(false)
+        setDeletingPaymentId(null)
+        fetchData()
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'No se pudo eliminar el pago',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Error de conexión',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -488,7 +614,7 @@ export default function RelacionGastosPage() {
                               </div>
                             </div>
 
-                            {/* Pending Expenses */}
+                            {/* Pending Expenses - SIN ACCIONES */}
                             {ownerBalance.pendingExpenses.length > 0 && (
                               <div>
                                 <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
@@ -504,7 +630,6 @@ export default function RelacionGastosPage() {
                                         <TableHead>Categoría</TableHead>
                                         <TableHead>Fecha</TableHead>
                                         <TableHead className="text-right">Monto</TableHead>
-                                        <TableHead className="text-center">Acción</TableHead>
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -523,19 +648,6 @@ export default function RelacionGastosPage() {
                                           <TableCell className="text-right font-medium text-red-500">
                                             {formatCurrency(expense.amount)}
                                           </TableCell>
-                                          <TableCell className="text-center">
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => openReimburseDialog(
-                                                { id: expense.id, description: expense.description, amount: expense.amount },
-                                                ownerBalance.owner.id
-                                              )}
-                                            >
-                                              <CheckCircle className="h-4 w-4 mr-1" />
-                                              Marcar Reembolsado
-                                            </Button>
-                                          </TableCell>
                                         </TableRow>
                                       ))}
                                       <TableRow className="bg-muted/50">
@@ -543,7 +655,6 @@ export default function RelacionGastosPage() {
                                         <TableCell className="text-right font-bold text-red-500">
                                           {formatCurrency(ownerBalance.totals.pending)}
                                         </TableCell>
-                                        <TableCell></TableCell>
                                       </TableRow>
                                     </TableBody>
                                   </Table>
@@ -551,7 +662,7 @@ export default function RelacionGastosPage() {
                               </div>
                             )}
 
-                            {/* Owner Payments */}
+                            {/* Owner Payments - CON ACCIÓN DE EDITAR */}
                             {ownerBalance.ownerPayments.length > 0 && (
                               <div>
                                 <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
@@ -567,6 +678,7 @@ export default function RelacionGastosPage() {
                                         <TableHead>Referencia</TableHead>
                                         <TableHead>Notas</TableHead>
                                         <TableHead className="text-right">Monto</TableHead>
+                                        <TableHead className="text-center">Acciones</TableHead>
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -579,10 +691,31 @@ export default function RelacionGastosPage() {
                                           <TableCell className="text-right font-medium text-green-500">
                                             +{formatCurrency(payment.amount)}
                                           </TableCell>
+                                          <TableCell className="text-center">
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                  <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={() => openEditPaymentDialog(payment, ownerBalance.owner.id)}>
+                                                  <Edit className="h-4 w-4 mr-2" />
+                                                  Editar
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem 
+                                                  className="text-destructive"
+                                                  onClick={() => openDeletePaymentDialog(payment.id)}
+                                                >
+                                                  Eliminar
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </TableCell>
                                         </TableRow>
                                       ))}
                                       <TableRow className="bg-muted/50">
-                                        <TableCell colSpan={4} className="font-medium">Total Pagos</TableCell>
+                                        <TableCell colSpan={5} className="font-medium">Total Pagos</TableCell>
                                         <TableCell className="text-right font-bold text-green-500">
                                           {formatCurrency(ownerBalance.totals.payments)}
                                         </TableCell>
@@ -696,6 +829,105 @@ export default function RelacionGastosPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Payment Dialog */}
+      <Dialog open={editPaymentDialogOpen} onOpenChange={setEditPaymentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Pago de Propietario</DialogTitle>
+            <DialogDescription>
+              Modifica los datos del pago
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditPaymentSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Monto *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={editPaymentForm.amount}
+                onChange={(e) => setEditPaymentForm({ ...editPaymentForm, amount: e.target.value })}
+                placeholder="0.00"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Fecha *</Label>
+              <Input
+                type="date"
+                value={editPaymentForm.paymentDate}
+                onChange={(e) => setEditPaymentForm({ ...editPaymentForm, paymentDate: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Método de Pago</Label>
+              <Select 
+                value={editPaymentForm.paymentMethod} 
+                onValueChange={(v) => setEditPaymentForm({ ...editPaymentForm, paymentMethod: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar método" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentMethods.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Número de Referencia</Label>
+              <Input
+                value={editPaymentForm.referenceNumber}
+                onChange={(e) => setEditPaymentForm({ ...editPaymentForm, referenceNumber: e.target.value })}
+                placeholder="Ej: TRANS-123456"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Notas</Label>
+              <Textarea
+                value={editPaymentForm.notes}
+                onChange={(e) => setEditPaymentForm({ ...editPaymentForm, notes: e.target.value })}
+                placeholder="Notas adicionales..."
+                rows={2}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditPaymentDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Guardar Cambios
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Payment Dialog */}
+      <AlertDialog open={deletePaymentDialogOpen} onOpenChange={setDeletePaymentDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar pago?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. El pago será eliminado permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeletePayment}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Reimburse Dialog */}
       <Dialog open={reimburseDialogOpen} onOpenChange={setReimburseDialogOpen}>
