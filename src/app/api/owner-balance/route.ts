@@ -59,23 +59,6 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Get reimbursed expenses
-    const reimbursedExpenses = await prisma.expense.findMany({
-      where: {
-        propertyId: { in: propertyIds },
-        paidByAdmin: true,
-        reimbursedByOwner: true
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            title: true
-          }
-        }
-      }
-    })
-
     // Get all owner payments
     const ownerPayments = await prisma.ownerPayment.findMany({
       where: effectiveOwnerId ? { ownerId: effectiveOwnerId } : {},
@@ -101,22 +84,6 @@ export async function GET(request: NextRequest) {
           }
         }))
 
-      // Reimbursed expenses for this owner
-      const ownerReimbursedExpenses = reimbursedExpenses
-        .filter(e => ownerPropertyIds.includes(e.propertyId))
-        .map(e => ({
-          id: e.id,
-          description: e.description || e.title,
-          amount: e.amount,
-          date: e.expenseDate.toISOString(),
-          category: e.category,
-          property: {
-            id: e.propertyId,
-            title: e.property?.title || 'N/A'
-          },
-          reimbursedAt: e.reimbursedAt?.toISOString() || null
-        }))
-
       // Owner payments
       const ownerPaymentsList = ownerPayments
         .filter(p => p.ownerId === owner.id)
@@ -131,7 +98,6 @@ export async function GET(request: NextRequest) {
 
       // Calculate totals
       const pending = ownerPendingExpenses.reduce((sum, e) => sum + e.amount, 0)
-      const reimbursed = ownerReimbursedExpenses.reduce((sum, e) => sum + e.amount, 0)
       const payments = ownerPaymentsList.reduce((sum, p) => sum + p.amount, 0)
 
       // Balance = payments - pending (positive = owner has credit, negative = owner owes)
@@ -146,21 +112,18 @@ export async function GET(request: NextRequest) {
           propertiesCount: owner.propertiesAsOwner.length
         },
         pendingExpenses: ownerPendingExpenses,
-        reimbursedExpenses: ownerReimbursedExpenses,
         ownerPayments: ownerPaymentsList,
         totals: {
           pending,
-          reimbursed,
           payments,
           balance
         }
       }
-    }).filter(ob => ob.pendingExpenses.length > 0 || ob.ownerPayments.length > 0 || ob.totals.reimbursed > 0)
+    }).filter(ob => ob.pendingExpenses.length > 0 || ob.ownerPayments.length > 0)
 
     // Calculate overall totals
     const totals = {
       totalPending: ownersData.reduce((sum, o) => sum + o.totals.pending, 0),
-      totalReimbursed: ownersData.reduce((sum, o) => sum + o.totals.reimbursed, 0),
       totalPayments: ownersData.reduce((sum, o) => sum + o.totals.payments, 0),
       totalBalance: ownersData.reduce((sum, o) => sum + o.totals.balance, 0)
     }
