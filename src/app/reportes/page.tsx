@@ -386,7 +386,7 @@ export default function ReportesPage() {
     }
   }
 
-  const handleDownloadPDF = () => {
+const handleDownloadPDF = () => {
     if (!reportData) {
       toast({
         title: 'Sin datos',
@@ -397,25 +397,39 @@ export default function ReportesPage() {
     }
 
     try {
+      // Generate a safe filename
+      const safeMonthName = reportData.period.monthName?.replace(/[^a-zA-Z0-9]/g, '_') || 'mes'
+      const safeYear = reportData.period.year || new Date().getFullYear()
+      const safeMonth = reportData.period.month || '1'
+      
       const doc = generateReportPDF({
         title: reportData.period.type === 'monthly' 
-          ? `Reporte ${reportData.period.monthName} ${reportData.period.year}`
-          : `Reporte Anual ${reportData.period.year}`,
+          ? `Reporte ${reportData.period.monthName || 'Mensual'} ${safeYear}`
+          : `Reporte Anual ${safeYear}`,
         period: reportData.period.type === 'monthly' 
-          ? `${reportData.period.monthName} ${reportData.period.year}`
-          : `Año ${reportData.period.year}`,
-        adminSummary: adminSummary.trim() || undefined,
+          ? `${reportData.period.monthName || 'Mes'} ${safeYear}`
+          : `Ano ${safeYear}`,
+        adminSummary: adminSummary?.trim() || undefined,
         data: {
-          totals: reportData.totals,
-          properties: reportData.properties,
-          monthlyData: reportData.monthlyData,
-          tickets: reportData.tickets,
+          totals: reportData.totals || {
+            grossIncome: 0,
+            fixedExpenses: 0,
+            variableExpenses: 0,
+            totalExpenses: 0,
+            netIncome: 0,
+            itbmsCollected: 0,
+            itbmsPaid: 0,
+            propertiesCount: 0,
+          },
+          properties: reportData.properties || [],
+          monthlyData: reportData.monthlyData || undefined,
+          tickets: reportData.tickets || undefined,
         },
       })
 
       const fileName = reportData.period.type === 'monthly'
-        ? `reporte_${reportData.period.month}_${reportData.period.year}.pdf`
-        : `reporte_anual_${reportData.period.year}.pdf`
+        ? `reporte_${safeMonth}_${safeYear}.pdf`
+        : `reporte_anual_${safeYear}.pdf`
 
       doc.save(fileName)
       
