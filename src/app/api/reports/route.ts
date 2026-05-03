@@ -66,12 +66,12 @@ export async function GET(request: NextRequest) {
       where: propertyWhere,
       include: {
         owner: {
-          select: { id: true, name: true }
+          select: { id: true, name: true, email: true, phone: true }
         },
         contracts: {
           where: { status: 'VIGENTE' },
           include: {
-            tenant: { select: { id: true, name: true } }
+            tenant: { select: { id: true, name: true, email: true, phone: true } }
           }
         }
       }
@@ -99,7 +99,8 @@ export async function GET(request: NextRequest) {
             propertiesCount: 0
           },
           generated: true,
-          tickets: []
+          tickets: [],
+          ownerBalance: null
         }
       })
     }
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
       orderBy: { expenseDate: 'desc' }
     })
 
-    // Obtener pagos del período (usando modelo Payment, no Invoice)
+    // Obtener pagos del período
     const payments = await prisma.payment.findMany({
       where: {
         status: 'PAGADO',
@@ -132,7 +133,7 @@ export async function GET(request: NextRequest) {
       orderBy: { paidAt: 'desc' }
     })
 
-    // Obtener tickets del período (usando modelo SupportTicket)
+    // Obtener tickets del período
     const tickets = await prisma.supportTicket.findMany({
       where: {
         propertyId: { in: propertyIds },
@@ -144,12 +145,60 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' }
     })
 
+    // ========== OWNER BALANCE DATA ==========
+    // Get pending expenses (paid by admin, not reimbursed)
+    const pendingExpenses = await prisma.expense.findMany({
+      where: {
+        propertyId: { in: propertyIds },
+        paidByAdmin: true,
+        reimbursedByOwner: false
+      },
+      include: {
+        property: {
+          select: { id: true, title: true }
+        }
+      }
+    })
+
+    // Get owner payments
+    const ownerPayments = await prisma.ownerPayment.findMany({
+      where: effectiveOwnerId ? { ownerId: effectiveOwnerId } : {},
+      orderBy: { paymentDate: 'desc' }
+    })
+
+    // Build owner balance data
+    const ownerBalanceData = {
+      pendingExpenses: pendingExpenses.map(e => ({
+        id: e.id,
+        description: e.description || e.title,
+        amount: e.amount,
+        date: e.expenseDate.toISOString(),
+        category: e.category,
+        property: {
+          id: e.propertyId,
+          title: e.property?.title || 'N/A'
+        }
+      })),
+      ownerPayments: ownerPayments.map(p => ({
+        id: p.id,
+        amount: p.amount,
+        date: p.paymentDate.toISOString(),
+        method: p.paymentMethod,
+        reference: p.referenceNumber,
+        notes: p.notes
+      })),
+      totals: {
+        pending: pendingExpenses.reduce((sum, e) => sum + e.amount, 0),
+        payments: ownerPayments.reduce((sum, p) => sum + p.amount, 0)
+      }
+    }
+    ownerBalanceData.totals.balance = ownerBalanceData.totals.payments - ownerBalanceData.totals.pending
+
     // Procesar datos por propiedad
     const propertiesData = properties.map(property => {
       const propertyExpenses = expenses.filter(e => e.propertyId === property.id)
       const propertyPayments = payments.filter(p => p.propertyId === property.id)
       
-      // Clasificar gastos por tipo
       const fixedExpensesList = propertyExpenses.filter(e => e.expenseType === 'FIJO')
       const variableExpensesList = propertyExpenses.filter(e => e.expenseType === 'VARIABLE')
 
@@ -158,7 +207,6 @@ export async function GET(request: NextRequest) {
       const grossIncome = propertyPayments.reduce((sum, p) => sum + p.totalAmount, 0)
       const monthlyRent = property.contracts[0]?.monthlyAmount || 0
 
-      // Obtener contrato vigente con todos los datos
       const activeContract = property.contracts[0]
       
       return {
@@ -178,12 +226,12 @@ export async function GET(request: NextRequest) {
         paymentsCount: propertyPayments.length,
         expensesCount: propertyExpenses.length,
         owner: property.owner,
-        // Datos del inquilino
         tenant: activeContract?.tenant ? {
           id: activeContract.tenant.id,
-          name: activeContract.tenant.name
+          name: activeContract.tenant.name,
+          email: activeContract.tenant.email,
+          phone: activeContract.tenant.phone
         } : null,
-        // Datos del contrato de arrendamiento
         contract: activeContract ? {
           id: activeContract.id,
           startDate: activeContract.startDate.toISOString(),
@@ -350,7 +398,8 @@ export async function GET(request: NextRequest) {
             title: t.property.title,
             address: t.property.address
           }
-        }))
+        })),
+        ownerBalance: ownerBalanceData
       }
     })
 
