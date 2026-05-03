@@ -216,6 +216,7 @@ export async function GET(request: NextRequest) {
           tenant: p.user?.name
         }))
       }
+    })
 
     // Calcular totales
     const totals = {
