@@ -387,34 +387,50 @@ export default function ReportesPage() {
   }
 
   const handleDownloadPDF = () => {
-    if (!reportData) return
+    if (!reportData) {
+      toast({
+        title: 'Sin datos',
+        description: 'No hay datos de reporte para exportar.',
+        variant: 'destructive',
+      })
+      return
+    }
 
-    const doc = generateReportPDF({
-      title: reportData.period.type === 'monthly' 
-        ? `Reporte ${reportData.period.monthName} ${reportData.period.year}`
-        : `Reporte Anual ${reportData.period.year}`,
-      period: reportData.period.type === 'monthly' 
-        ? `${reportData.period.monthName} ${reportData.period.year}`
-        : `Año ${reportData.period.year}`,
-      adminSummary: adminSummary.trim() || undefined,
-      data: {
-        totals: reportData.totals,
-        properties: reportData.properties,
-        monthlyData: reportData.monthlyData,
-        tickets: reportData.tickets,
-      },
-    })
+    try {
+      const doc = generateReportPDF({
+        title: reportData.period.type === 'monthly' 
+          ? `Reporte ${reportData.period.monthName} ${reportData.period.year}`
+          : `Reporte Anual ${reportData.period.year}`,
+        period: reportData.period.type === 'monthly' 
+          ? `${reportData.period.monthName} ${reportData.period.year}`
+          : `Año ${reportData.period.year}`,
+        adminSummary: adminSummary.trim() || undefined,
+        data: {
+          totals: reportData.totals,
+          properties: reportData.properties,
+          monthlyData: reportData.monthlyData,
+          tickets: reportData.tickets,
+        },
+      })
 
-    const fileName = reportData.period.type === 'monthly'
-      ? `reporte_${reportData.period.month}_${reportData.period.year}.pdf`
-      : `reporte_anual_${reportData.period.year}.pdf`
+      const fileName = reportData.period.type === 'monthly'
+        ? `reporte_${reportData.period.month}_${reportData.period.year}.pdf`
+        : `reporte_anual_${reportData.period.year}.pdf`
 
-    doc.save(fileName)
-    
-    toast({
-      title: 'PDF descargado',
-      description: 'El reporte ha sido exportado exitosamente.',
-    })
+      doc.save(fileName)
+      
+      toast({
+        title: 'PDF descargado',
+        description: 'El reporte ha sido exportado exitosamente.',
+      })
+    } catch (error) {
+      console.error('Error al generar PDF:', error)
+      toast({
+        title: 'Error',
+        description: `No se pudo generar el PDF: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+        variant: 'destructive',
+      })
+    }
   }
 
   // Aggregate all expenses across properties
@@ -1097,7 +1113,7 @@ export default function ReportesPage() {
                                 </div>
                               )}
 
-                              {/* Additional Stats (Monthly only) */}
+                              {/* Additional Stats (Monthly Only) */}
                               {period === 'monthly' && 'occupancyRate' in prop && (
                                 <div className="grid grid-cols-3 gap-4 pt-4 border-t">
                                   <div className="text-center">
