@@ -158,6 +158,9 @@ export async function GET(request: NextRequest) {
       const grossIncome = propertyPayments.reduce((sum, p) => sum + p.totalAmount, 0)
       const monthlyRent = property.contracts[0]?.monthlyAmount || 0
 
+      // Obtener contrato vigente con todos los datos
+      const activeContract = property.contracts[0]
+      
       return {
         propertyId: property.id,
         propertyTitle: property.title,
@@ -175,6 +178,20 @@ export async function GET(request: NextRequest) {
         paymentsCount: propertyPayments.length,
         expensesCount: propertyExpenses.length,
         owner: property.owner,
+        // Datos del inquilino
+        tenant: activeContract?.tenant ? {
+          id: activeContract.tenant.id,
+          name: activeContract.tenant.name
+        } : null,
+        // Datos del contrato de arrendamiento
+        contract: activeContract ? {
+          id: activeContract.id,
+          startDate: activeContract.startDate.toISOString(),
+          endDate: activeContract.endDate.toISOString(),
+          monthlyAmount: activeContract.monthlyAmount,
+          deposit: activeContract.deposit,
+          status: activeContract.status
+        } : null,
         expensesDetails: {
           fixed: fixedExpensesList.map(e => ({
             id: e.id,
@@ -199,7 +216,6 @@ export async function GET(request: NextRequest) {
           tenant: p.user?.name
         }))
       }
-    })
 
     // Calcular totales
     const totals = {
