@@ -431,14 +431,14 @@ export default function RelacionGastosPage() {
               </div>
             </div>
 
-            {/* Summary Cards */}
+            {/* Summary Cards - 3 tarjetas: Gastos, Pagos, Balance */}
             {data && (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-3">
                 <Card>
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Total Pendiente</p>
+                        <p className="text-sm text-muted-foreground">Gastos</p>
                         <p className="text-2xl font-bold text-red-500">{formatCurrency(data.totals.totalPending)}</p>
                         <p className="text-xs text-muted-foreground">Por cobrar a propietarios</p>
                       </div>
@@ -453,22 +453,7 @@ export default function RelacionGastosPage() {
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Total Reembolsado</p>
-                        <p className="text-2xl font-bold text-green-500">{formatCurrency(data.totals.totalReimbursed)}</p>
-                        <p className="text-xs text-muted-foreground">Ya reembolsado</p>
-                      </div>
-                      <div className="h-12 w-12 rounded-xl bg-green-500/10 flex items-center justify-center">
-                        <CheckCircle className="h-6 w-6 text-green-500" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Pagos Recibidos</p>
+                        <p className="text-sm text-muted-foreground">Pagos</p>
                         <p className="text-2xl font-bold text-blue-500">{formatCurrency(data.totals.totalPayments)}</p>
                         <p className="text-xs text-muted-foreground">Pagos de propietarios</p>
                       </div>
@@ -483,7 +468,7 @@ export default function RelacionGastosPage() {
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Balance General</p>
+                        <p className="text-sm text-muted-foreground">Balance</p>
                         <p className={cn(
                           "text-2xl font-bold",
                           data.totals.totalBalance >= 0 ? "text-green-500" : "text-red-500"
@@ -584,15 +569,11 @@ export default function RelacionGastosPage() {
                         {/* Expanded Details */}
                         {expandedOwners.has(ownerBalance.owner.id) && (
                           <div className="border-t p-4 space-y-6 bg-muted/30">
-                            {/* Summary */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {/* Summary - 3 columnas: Gastos, Pagos, Balance */}
+                            <div className="grid grid-cols-3 gap-4">
                               <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/10">
-                                <p className="text-xs text-muted-foreground">Pendiente</p>
+                                <p className="text-xs text-muted-foreground">Gastos</p>
                                 <p className="text-lg font-bold text-red-500">{formatCurrency(ownerBalance.totals.pending)}</p>
-                              </div>
-                              <div className="p-3 rounded-lg bg-green-500/5 border border-green-500/10">
-                                <p className="text-xs text-muted-foreground">Reembolsado</p>
-                                <p className="text-lg font-bold text-green-500">{formatCurrency(ownerBalance.totals.reimbursed)}</p>
                               </div>
                               <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
                                 <p className="text-xs text-muted-foreground">Pagos</p>
@@ -614,7 +595,7 @@ export default function RelacionGastosPage() {
                               </div>
                             </div>
 
-                            {/* Pending Expenses - SIN ACCIONES */}
+                            {/* Pending Expenses */}
                             {ownerBalance.pendingExpenses.length > 0 && (
                               <div>
                                 <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
@@ -651,7 +632,7 @@ export default function RelacionGastosPage() {
                                         </TableRow>
                                       ))}
                                       <TableRow className="bg-muted/50">
-                                        <TableCell colSpan={4} className="font-medium">Total Pendiente</TableCell>
+                                        <TableCell colSpan={4} className="font-medium">Total Gastos</TableCell>
                                         <TableCell className="text-right font-bold text-red-500">
                                           {formatCurrency(ownerBalance.totals.pending)}
                                         </TableCell>
@@ -662,7 +643,7 @@ export default function RelacionGastosPage() {
                               </div>
                             )}
 
-                            {/* Owner Payments - CON ACCIÓN DE EDITAR */}
+                            {/* Owner Payments */}
                             {ownerBalance.ownerPayments.length > 0 && (
                               <div>
                                 <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
