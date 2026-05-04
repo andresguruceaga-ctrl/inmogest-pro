@@ -8,13 +8,18 @@ export async function GET(request: NextRequest) {
     const ownerId = searchParams.get('ownerId');
     const propertyId = searchParams.get('propertyId');
 
-    // Obtener todas las propiedades con sus propietarios
+    // Construir filtros dinámicamente
+    const propertyWhere: Record<string, unknown> = {};
+    if (ownerId) {
+      propertyWhere.ownerId = ownerId;
+    }
+    if (propertyId) {
+      propertyWhere.id = propertyId;
+    }
+
+    // Obtener todas las propiedades
     const properties = await db.property.findMany({
-      where: {
-        ownerId: { not: null },
-        ...(ownerId && { ownerId }),
-        ...(propertyId && { id: propertyId }),
-      },
+      where: propertyWhere,
       include: {
         owner: {
           select: {
@@ -27,41 +32,37 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Obtener gastos pagados por admin (paidByAdmin = true) que no han sido reembolsados
+    // Filtrar solo propiedades que tienen owner
+    const propertiesWithOwner = properties.filter(p => p.ownerId && p.owner);
+
+    // Obtener gastos pagados por admin que no han sido reembolsados
+    const expenseWhere: Record<string, unknown> = {
+      paidByAdmin: true,
+      reimbursedByOwner: false,
+    };
+    if (propertyId) {
+      expenseWhere.propertyId = propertyId;
+    }
+
     const adminExpenses = await db.expense.findMany({
-      where: {
-        paidByAdmin: true,
-        reimbursedByOwner: false,
-        propertyId: { not: null },
-        ...(propertyId && { propertyId }),
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            title: true,
-            ownerId: true,
-          },
-        },
-      },
+      where: expenseWhere,
     });
 
-    // Obtener pagos de propietarios con propertyId
+    // Filtrar gastos que tienen propertyId
+    const validAdminExpenses = adminExpenses.filter(e => e.propertyId);
+
+    // Obtener pagos de propietarios
+    const paymentWhere: Record<string, unknown> = {};
+    if (propertyId) {
+      paymentWhere.propertyId = propertyId;
+    }
+
     const ownerPayments = await db.ownerPayment.findMany({
-      where: {
-        propertyId: { not: null },
-        ...(propertyId && { propertyId }),
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            title: true,
-            ownerId: true,
-          },
-        },
-      },
+      where: paymentWhere,
     });
+
+    // Filtrar pagos que tienen propertyId
+    const validOwnerPayments = ownerPayments.filter(p => p.propertyId);
 
     // Construir balance por propiedad
     const propertyBalances: Array<{
@@ -99,11 +100,11 @@ export async function GET(request: NextRequest) {
     }> = [];
 
     // Procesar cada propiedad
-    for (const property of properties) {
+    for (const property of propertiesWithOwner) {
       if (!property.owner) continue;
 
       // Gastos pendientes de reembolso para esta propiedad
-      const pendingExpenses = adminExpenses
+      const pendingExpenses = validAdminExpenses
         .filter(e => e.propertyId === property.id)
         .map(e => ({
           id: e.id,
@@ -114,7 +115,7 @@ export async function GET(request: NextRequest) {
         }));
 
       // Pagos del propietario para esta propiedad
-      const propertyPayments = ownerPayments
+      const propertyPayments = validOwnerPayments
         .filter(p => p.propertyId === property.id)
         .map(p => ({
           id: p.id,
@@ -166,7 +167,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error al obtener balance:', error);
+    console.error('[owner-balance] ERROR:', error);
     return NextResponse.json(
       { success: false, error: 'Error al obtener el balance de propiedades' },
       { status: 500 }
