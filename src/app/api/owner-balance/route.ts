@@ -21,12 +21,18 @@ export async function GET(request: NextRequest) {
       ? session.user.id
       : ownerId;
 
+    // Construir filtro de propiedades
+    const propertyWhere: Record<string, unknown> = {};
+    if (effectiveOwnerId) {
+      propertyWhere.ownerId = effectiveOwnerId;
+    }
+    if (propertyId) {
+      propertyWhere.id = propertyId;
+    }
+
     // Obtener todas las propiedades con sus propietarios
     const properties = await prisma.property.findMany({
-      where: {
-        ownerId: effectiveOwnerId ? effectiveOwnerId : { not: '' },
-        ...(propertyId && { id: propertyId })
-      },
+      where: propertyWhere,
       include: {
         owner: {
           select: {
@@ -54,11 +60,9 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Obtener pagos de propietarios
+    // Obtener pagos de propietarios (sin filtrar por propertyId ya que no existe la columna aún)
     const ownerPayments = await prisma.ownerPayment.findMany({
-      where: {
-        propertyId: { in: propertyIds }
-      }
+      where: effectiveOwnerId ? { ownerId: effectiveOwnerId } : {}
     });
 
     // Construir balance por propiedad
@@ -77,8 +81,10 @@ export async function GET(request: NextRequest) {
         }));
 
       // Pagos del propietario para esta propiedad
+      // Por ahora asignamos todos los pagos del owner a todas sus propiedades
+      // hasta que se agregue la columna propertyId
       const propertyPayments = ownerPayments
-        .filter(p => p.propertyId === property.id)
+        .filter(p => p.ownerId === property.ownerId)
         .map(p => ({
           id: p.id,
           amount: p.amount,
