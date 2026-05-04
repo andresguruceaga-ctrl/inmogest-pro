@@ -1,146 +1,164 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { z } from 'zod';
 
-// GET - Get owner balances BY PROPERTY
+// Esquema de validación
+const ownerPaymentSchema = z.object({
+  ownerId: z.string().min(1, 'El propietario es requerido'),
+  propertyId: z.string().optional().nullable(), // Agregado: propiedad asociada al pago
+  amount: z.number().min(0.01, 'El monto debe ser mayor a 0'),
+  paymentDate: z.string().min(1, 'La fecha es requerida'),
+  paymentMethod: z.string().optional().nullable(),
+  referenceNumber: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  receiptImage: z.string().optional().nullable(),
+});
+
+// GET - Listar pagos de propietarios
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const { searchParams } = new URL(request.url);
+    const ownerId = searchParams.get('ownerId');
+    const propertyId = searchParams.get('propertyId'); // Agregado: filtrar por propiedad
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
-    if (!session?.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const where: Record<string, unknown> = {};
+    
+    if (ownerId) {
+      where.ownerId = ownerId;
+    }
+    
+    if (propertyId) {
+      where.propertyId = propertyId;
+    }
+    
+    if (startDate || endDate) {
+      where.paymentDate = {};
+      if (startDate) {
+        where.paymentDate = { ...where.paymentDate, gte: new Date(startDate) };
+      }
+      if (endDate) {
+        where.paymentDate = { ...where.paymentDate, lte: new Date(endDate) };
+      }
     }
 
-    const { searchParams } = new URL(request.url)
-    const ownerId = searchParams.get('ownerId')
-    
-    // Si es propietario, solo puede ver sus propios datos
-    const effectiveOwnerId = session.user.role === 'PROPIETARIO' 
-      ? session.user.id 
-      : ownerId
-
-    // Get all properties with owner info
-    const properties = await prisma.property.findMany({
-      where: {
-        owner: {
-          role: 'PROPIETARIO',
-          ...(effectiveOwnerId ? { id: effectiveOwnerId } : {})
-        }
-      },
-      select: {
-        id: true,
-        title: true,
-        address: true,
+    const payments = await db.ownerPayment.findMany({
+      where,
+      include: {
         owner: {
           select: {
             id: true,
             name: true,
             email: true,
-            phone: true
-          }
-        }
-      }
-    })
-
-    const propertyIds = properties.map(p => p.id)
-
-    // Get pending expenses (paid by admin, not reimbursed)
-    const pendingExpenses = await prisma.expense.findMany({
-      where: {
-        propertyId: { in: propertyIds },
-        paidByAdmin: true,
-        reimbursedByOwner: false
-      },
-      include: {
+            phone: true,
+          },
+        },
         property: {
           select: {
             id: true,
-            title: true
-          }
-        }
-      }
-    })
-
-    // Get all owner payments
-    const ownerPayments = await prisma.ownerPayment.findMany({
-      where: effectiveOwnerId ? { ownerId: effectiveOwnerId } : {},
-      orderBy: { paymentDate: 'desc' }
-    })
-
-    // Build balance for each PROPERTY
-    const propertiesData = properties.map(property => {
-      // Pending expenses for this property
-      const propertyPendingExpenses = pendingExpenses
-        .filter(e => e.propertyId === property.id)
-        .map(e => ({
-          id: e.id,
-          description: e.description || e.title,
-          amount: e.amount,
-          date: e.expenseDate.toISOString(),
-          category: e.category,
-          property: {
-            id: e.propertyId,
-            title: e.property?.title || 'N/A'
-          }
-        }))
-
-      // Owner payments for this property
-      const propertyOwnerPayments = ownerPayments
-        .filter(p => p.propertyId === property.id || (!p.propertyId && p.ownerId === property.owner.id))
-        .map(p => ({
-          id: p.id,
-          amount: p.amount,
-          date: p.paymentDate.toISOString(),
-          method: p.paymentMethod,
-          reference: p.referenceNumber,
-          notes: p.notes
-        }))
-
-      // Calculate totals for this property
-      const pending = propertyPendingExpenses.reduce((sum, e) => sum + e.amount, 0)
-      const payments = propertyOwnerPayments.reduce((sum, p) => sum + p.amount, 0)
-
-      return {
-        property: {
-          id: property.id,
-          title: property.title,
-          address: property.address
+            title: true,
+            address: true,
+          },
         },
-        owner: property.owner,
-        pendingExpenses: propertyPendingExpenses,
-        ownerPayments: propertyOwnerPayments,
-        totals: {
-          pending,
-          payments,
-          balance: payments - pending
-        }
-      }
-    }).filter(pData => pData.pendingExpenses.length > 0 || pData.ownerPayments.length > 0)
-
-    // Calculate overall totals (sin duplicar pagos)
-    const uniquePayments = new Map<string, typeof ownerPayments[0]>()
-    ownerPayments.forEach(p => {
-      if (!uniquePayments.has(p.id)) {
-        uniquePayments.set(p.id, p)
-      }
-    })
-
-    const totals = {
-      totalPending: propertiesData.reduce((sum, p) => sum + p.totals.pending, 0),
-      totalPayments: Array.from(uniquePayments.values()).reduce((sum, p) => sum + p.amount, 0),
-    }
-    totals.totalBalance = totals.totalPayments - totals.totalPending
+      },
+      orderBy: { paymentDate: 'desc' },
+    });
 
     return NextResponse.json({
       success: true,
-      data: {
-        properties: propertiesData,
-        totals
-      }
-    })
+      data: payments,
+    });
   } catch (error) {
-    console.error('Error fetching owner balances:', error)
-    return NextResponse.json({ error: 'Error al obtener balances' }, { status: 500 })
+    console.error('Error al obtener pagos:', error);
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener los pagos' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST - Crear nuevo pago
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const validatedData = ownerPaymentSchema.parse(body);
+
+    // Verificar que el propietario existe
+    const owner = await db.user.findUnique({
+      where: { id: validatedData.ownerId },
+    });
+
+    if (!owner) {
+      return NextResponse.json(
+        { success: false, error: 'El propietario no existe' },
+        { status: 400 }
+      );
+    }
+
+    // Si se proporciona propertyId, verificar que existe y pertenece al propietario
+    if (validatedData.propertyId) {
+      const property = await db.property.findFirst({
+        where: {
+          id: validatedData.propertyId,
+          ownerId: validatedData.ownerId,
+        },
+      });
+
+      if (!property) {
+        return NextResponse.json(
+          { success: false, error: 'La propiedad no existe o no pertenece a este propietario' },
+          { status: 400 }
+        );
+      }
+    }
+
+    const payment = await db.ownerPayment.create({
+      data: {
+        ownerId: validatedData.ownerId,
+        propertyId: validatedData.propertyId || null,
+        amount: validatedData.amount,
+        paymentDate: new Date(validatedData.paymentDate),
+        paymentMethod: validatedData.paymentMethod || null,
+        referenceNumber: validatedData.referenceNumber || null,
+        notes: validatedData.notes || null,
+        receiptImage: validatedData.receiptImage || null,
+      },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        property: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: payment,
+      message: 'Pago registrado exitosamente',
+    });
+  } catch (error) {
+    console.error('Error al crear pago:', error);
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: 'Datos invalidos', details: error.errors },
+        { status: 400 }
+      );
+    }
+    
+    return NextResponse.json(
+      { success: false, error: 'Error al registrar el pago' },
+      { status: 500 }
+    );
   }
 }
