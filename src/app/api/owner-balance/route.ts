@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-// GET - Get owner balances
+// GET - Get owner balances BY PROPERTY
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -20,27 +20,30 @@ export async function GET(request: NextRequest) {
       ? session.user.id 
       : ownerId
 
-    // Get all owners with their properties
-    const owners = await prisma.user.findMany({
+    // Get all properties with owner info
+    const properties = await prisma.property.findMany({
       where: {
-        role: 'PROPIETARIO',
-        ...(effectiveOwnerId ? { id: effectiveOwnerId } : {})
+        owner: {
+          role: 'PROPIETARIO',
+          ...(effectiveOwnerId ? { id: effectiveOwnerId } : {})
+        }
       },
       select: {
         id: true,
-        name: true,
-        email: true,
-        phone: true,
-        propertiesAsOwner: {
+        title: true,
+        address: true,
+        owner: {
           select: {
             id: true,
-            title: true
+            name: true,
+            email: true,
+            phone: true
           }
         }
       }
     })
 
-    const propertyIds = owners.flatMap(o => o.propertiesAsOwner.map(p => p.id))
+    const propertyIds = properties.map(p => p.id)
 
     // Get pending expenses (paid by admin, not reimbursed)
     const pendingExpenses = await prisma.expense.findMany({
@@ -65,13 +68,11 @@ export async function GET(request: NextRequest) {
       orderBy: { paymentDate: 'desc' }
     })
 
-    // Build balance for each owner
-    const ownersData = owners.map(owner => {
-      const ownerPropertyIds = owner.propertiesAsOwner.map(p => p.id)
-
-      // Pending expenses for this owner
-      const ownerPendingExpenses = pendingExpenses
-        .filter(e => ownerPropertyIds.includes(e.propertyId))
+    // Build balance for each PROPERTY
+    const propertiesData = properties.map(property => {
+      // Pending expenses for this property
+      const propertyPendingExpenses = pendingExpenses
+        .filter(e => e.propertyId === property.id)
         .map(e => ({
           id: e.id,
           description: e.description || e.title,
@@ -84,9 +85,9 @@ export async function GET(request: NextRequest) {
           }
         }))
 
-      // Owner payments
-      const ownerPaymentsList = ownerPayments
-        .filter(p => p.ownerId === owner.id)
+      // Owner payments for this property
+      const propertyOwnerPayments = ownerPayments
+        .filter(p => p.propertyId === property.id || (!p.propertyId && p.ownerId === property.owner.id))
         .map(p => ({
           id: p.id,
           amount: p.amount,
@@ -96,42 +97,45 @@ export async function GET(request: NextRequest) {
           notes: p.notes
         }))
 
-      // Calculate totals
-      const pending = ownerPendingExpenses.reduce((sum, e) => sum + e.amount, 0)
-      const payments = ownerPaymentsList.reduce((sum, p) => sum + p.amount, 0)
-
-      // Balance = payments - pending (positive = owner has credit, negative = owner owes)
-      const balance = payments - pending
+      // Calculate totals for this property
+      const pending = propertyPendingExpenses.reduce((sum, e) => sum + e.amount, 0)
+      const payments = propertyOwnerPayments.reduce((sum, p) => sum + p.amount, 0)
 
       return {
-        owner: {
-          id: owner.id,
-          name: owner.name || 'Sin nombre',
-          email: owner.email,
-          phone: owner.phone,
-          propertiesCount: owner.propertiesAsOwner.length
+        property: {
+          id: property.id,
+          title: property.title,
+          address: property.address
         },
-        pendingExpenses: ownerPendingExpenses,
-        ownerPayments: ownerPaymentsList,
+        owner: property.owner,
+        pendingExpenses: propertyPendingExpenses,
+        ownerPayments: propertyOwnerPayments,
         totals: {
           pending,
           payments,
-          balance
+          balance: payments - pending
         }
       }
-    }).filter(ob => ob.pendingExpenses.length > 0 || ob.ownerPayments.length > 0)
+    }).filter(pData => pData.pendingExpenses.length > 0 || pData.ownerPayments.length > 0)
 
-    // Calculate overall totals
+    // Calculate overall totals (sin duplicar pagos)
+    const uniquePayments = new Map<string, typeof ownerPayments[0]>()
+    ownerPayments.forEach(p => {
+      if (!uniquePayments.has(p.id)) {
+        uniquePayments.set(p.id, p)
+      }
+    })
+
     const totals = {
-      totalPending: ownersData.reduce((sum, o) => sum + o.totals.pending, 0),
-      totalPayments: ownersData.reduce((sum, o) => sum + o.totals.payments, 0),
-      totalBalance: ownersData.reduce((sum, o) => sum + o.totals.balance, 0)
+      totalPending: propertiesData.reduce((sum, p) => sum + p.totals.pending, 0),
+      totalPayments: Array.from(uniquePayments.values()).reduce((sum, p) => sum + p.amount, 0),
     }
+    totals.totalBalance = totals.totalPayments - totals.totalPending
 
     return NextResponse.json({
       success: true,
       data: {
-        owners: ownersData,
+        properties: propertiesData,
         totals
       }
     })
