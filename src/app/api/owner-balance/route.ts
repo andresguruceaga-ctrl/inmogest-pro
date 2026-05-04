@@ -1,4 +1,3 @@
-// Version 2 - Fixed ownerPayment query
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -61,9 +60,11 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Obtener pagos de propietarios (sin filtrar por propertyId ya que no existe la columna aún)
+    // Obtener pagos de propietarios filtrados por propertyId
     const ownerPayments = await prisma.ownerPayment.findMany({
-      where: effectiveOwnerId ? { ownerId: effectiveOwnerId } : {}
+      where: {
+        propertyId: { in: propertyIds }
+      }
     });
 
     // Construir balance por propiedad
@@ -81,11 +82,9 @@ export async function GET(request: NextRequest) {
           category: e.category,
         }));
 
-      // Pagos del propietario para esta propiedad
-      // Por ahora asignamos todos los pagos del owner a todas sus propiedades
-      // hasta que se agregue la columna propertyId
+      // Pagos del propietario para esta propiedad (filtrados por propertyId)
       const propertyPayments = ownerPayments
-        .filter(p => p.ownerId === property.ownerId)
+        .filter(p => p.propertyId === property.id)
         .map(p => ({
           id: p.id,
           amount: p.amount,
@@ -125,7 +124,7 @@ export async function GET(request: NextRequest) {
     const totals = {
       totalPending: propertyBalances.reduce((sum, p) => sum + (p?.totals.pending || 0), 0),
       totalPayments: propertyBalances.reduce((sum, p) => sum + (p?.totals.payments || 0), 0),
-      totalBalance: propertyBalances.reduce((sum, p) => sum + (p?.totals.balance || 0), 0),
+      totalBalance: propertyBalances.reduce((sum, p) => sum => (p?.totals.balance || 0), 0),
     };
 
     return NextResponse.json({
