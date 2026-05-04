@@ -78,6 +78,7 @@ model Property {
   owner            User              @relation("OwnerProperties", fields: [ownerId], references: [id], onDelete: Cascade)
   tenant           User?             @relation("TenantProperties", fields: [tenantId], references: [id])
   supportTickets   SupportTicket[]
+  ownerPayments    OwnerPayment[]
 
   @@index([ownerId])
   @@index([adminId])
@@ -278,9 +279,12 @@ model OwnerPayment {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   ownerId         String
+  propertyId      String?  // Propiedad asociada al pago (opcional)
   owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  property        Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
   @@index([ownerId])
+  @@index([propertyId])
   @@index([paymentDate])
 }
 
