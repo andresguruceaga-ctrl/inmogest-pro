@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-// GET - Get owner balances
+// GET - Obtener balance de gastos por propiedad
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -14,166 +14,125 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const ownerId = searchParams.get('ownerId')
-    
+    const propertyId = searchParams.get('propertyId')
+
     // Si es propietario, solo puede ver sus propios datos
-    const effectiveOwnerId = session.user.role === 'PROPIETARIO' 
-      ? session.user.id 
+    const effectiveOwnerId = session.user.role === 'PROPIETARIO'
+      ? session.user.id
       : ownerId
 
-    // Get all owners with their properties
-    const owners = await prisma.user.findMany({
+    // Obtener todas las propiedades con sus propietarios
+    const properties = await prisma.property.findMany({
       where: {
-        role: 'PROPIETARIO',
-        ...(effectiveOwnerId ? { id: effectiveOwnerId } : {})
+        ownerId: effectiveOwnerId ? effectiveOwnerId : { not: '' },
+        ...(propertyId && { id: propertyId })
       },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        propertiesAsOwner: {
+      include: {
+        owner: {
           select: {
             id: true,
-            title: true
-          }
-        }
-      }
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
     })
 
-    const propertyIds = owners.flatMap(o => o.propertiesAsOwner.map(p => p.id))
+    // Filtrar propiedades que tienen owner
+    const propertiesWithOwner = properties.filter(p => p.ownerId && p.owner)
 
-    // Get pending expenses (paid by admin, not reimbursed)
-    const pendingExpenses = await prisma.expense.findMany({
+    // Obtener IDs de propiedades
+    const propertyIds = propertiesWithOwner.map(p => p.id)
+
+    // Obtener gastos pagados por admin que no han sido reembolsados
+    const adminExpenses = await prisma.expense.findMany({
       where: {
         propertyId: { in: propertyIds },
         paidByAdmin: true,
         reimbursedByOwner: false
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            title: true
-          }
-        }
       }
     })
 
-    // Get reimbursed expenses
-    const reimbursedExpenses = await prisma.expense.findMany({
-      where: {
-        propertyId: { in: propertyIds },
-        paidByAdmin: true,
-        reimbursedByOwner: true
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            title: true
-          }
-        }
-      }
-    })
-
-    // Get all owner payments
+    // Obtener pagos de propietarios
     const ownerPayments = await prisma.ownerPayment.findMany({
-      where: effectiveOwnerId ? { ownerId: effectiveOwnerId } : {},
-      orderBy: { paymentDate: 'desc' }
+      where: {
+        propertyId: { in: propertyIds }
+      }
     })
 
-    // Build balance for each owner
-    const ownersData = owners.map(owner => {
-      const ownerPropertyIds = owner.propertiesAsOwner.map(p => p.id)
+    // Construir balance por propiedad
+    const propertyBalances = propertiesWithOwner.map(property => {
+      if (!property.owner) return null
 
-      // Pending expenses for this owner
-      const ownerPendingExpenses = pendingExpenses
-        .filter(e => ownerPropertyIds.includes(e.propertyId))
+      // Gastos pendientes de reembolso para esta propiedad
+      const pendingExpenses = adminExpenses
+        .filter(e => e.propertyId === property.id)
         .map(e => ({
           id: e.id,
           description: e.description || e.title,
           amount: e.amount,
           date: e.expenseDate.toISOString(),
           category: e.category,
-          property: {
-            id: e.propertyId,
-            title: e.property?.title || 'N/A'
-          }
         }))
 
-      // Reimbursed expenses for this owner
-      const ownerReimbursedExpenses = reimbursedExpenses
-        .filter(e => ownerPropertyIds.includes(e.propertyId))
-        .map(e => ({
-          id: e.id,
-          description: e.description || e.title,
-          amount: e.amount,
-          date: e.expenseDate.toISOString(),
-          category: e.category,
-          property: {
-            id: e.propertyId,
-            title: e.property?.title || 'N/A'
-          },
-          reimbursedAt: e.reimbursedAt?.toISOString() || null
-        }))
-
-      // Owner payments
-      const ownerPaymentsList = ownerPayments
-        .filter(p => p.ownerId === owner.id)
+      // Pagos del propietario para esta propiedad
+      const propertyPayments = ownerPayments
+        .filter(p => p.propertyId === property.id)
         .map(p => ({
           id: p.id,
           amount: p.amount,
           date: p.paymentDate.toISOString(),
           method: p.paymentMethod,
           reference: p.referenceNumber,
-          notes: p.notes
+          notes: p.notes,
         }))
 
-      // Calculate totals
-      const pending = ownerPendingExpenses.reduce((sum, e) => sum + e.amount, 0)
-      const reimbursed = ownerReimbursedExpenses.reduce((sum, e) => sum + e.amount, 0)
-      const payments = ownerPaymentsList.reduce((sum, p) => sum + p.amount, 0)
-
-      // Balance = payments - pending (positive = owner has credit, negative = owner owes)
-      const balance = payments - pending
+      const totalPending = pendingExpenses.reduce((sum, e) => sum + e.amount, 0)
+      const totalPayments = propertyPayments.reduce((sum, p) => sum + p.amount, 0)
+      const balance = totalPayments - totalPending
 
       return {
-        owner: {
-          id: owner.id,
-          name: owner.name || 'Sin nombre',
-          email: owner.email,
-          phone: owner.phone,
-          propertiesCount: owner.propertiesAsOwner.length
+        property: {
+          id: property.id,
+          title: property.title,
+          address: property.address,
         },
-        pendingExpenses: ownerPendingExpenses,
-        reimbursedExpenses: ownerReimbursedExpenses,
-        ownerPayments: ownerPaymentsList,
+        owner: {
+          id: property.owner.id,
+          name: property.owner.name || 'Sin nombre',
+          email: property.owner.email,
+          phone: property.owner.phone,
+        },
+        pendingExpenses,
+        ownerPayments: propertyPayments,
         totals: {
-          pending,
-          reimbursed,
-          payments,
-          balance
-        }
+          pending: totalPending,
+          payments: totalPayments,
+          balance,
+        },
       }
-    }).filter(ob => ob.pendingExpenses.length > 0 || ob.ownerPayments.length > 0 || ob.totals.reimbursed > 0)
+    }).filter(Boolean)
 
-    // Calculate overall totals
+    // Calcular totales generales
     const totals = {
-      totalPending: ownersData.reduce((sum, o) => sum + o.totals.pending, 0),
-      totalReimbursed: ownersData.reduce((sum, o) => sum + o.totals.reimbursed, 0),
-      totalPayments: ownersData.reduce((sum, o) => sum + o.totals.payments, 0),
-      totalBalance: ownersData.reduce((sum, o) => sum + o.totals.balance, 0)
+      totalPending: propertyBalances.reduce((sum, p) => sum + (p?.totals.pending || 0), 0),
+      totalPayments: propertyBalances.reduce((sum, p) => sum + (p?.totals.payments || 0), 0),
+      totalBalance: propertyBalances.reduce((sum, p) => sum + (p?.totals.balance || 0), 0),
     }
 
     return NextResponse.json({
       success: true,
       data: {
-        owners: ownersData,
-        totals
-      }
+        properties: propertyBalances,
+        totals,
+      },
     })
   } catch (error) {
-    console.error('Error fetching owner balances:', error)
-    return NextResponse.json({ error: 'Error al obtener balances' }, { status: 500 })
+    console.error('Error al obtener balance:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener el balance de propiedades' },
+      { status: 500 }
+    )
   }
 }
