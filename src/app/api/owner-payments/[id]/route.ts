@@ -9,6 +9,7 @@ const updatePaymentSchema = z.object({
   paymentMethod: z.string().optional().nullable(),
   referenceNumber: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  propertyId: z.string().optional().nullable(), // Agregado: permitir cambiar la propiedad
 });
 
 // GET - Obtener un pago específico
@@ -29,6 +30,13 @@ export async function GET(
             id: true,
             name: true,
             email: true,
+          },
+        },
+        property: {
+          select: {
+            id: true,
+            title: true,
+            address: true,
           },
         },
       },
@@ -77,6 +85,23 @@ export async function PUT(
     // Validar datos de entrada
     const validatedData = updatePaymentSchema.parse(body);
 
+    // Si se está cambiando la propiedad, verificar que pertenece al mismo owner
+    if (validatedData.propertyId !== undefined && validatedData.propertyId !== null) {
+      const property = await prisma.property.findFirst({
+        where: {
+          id: validatedData.propertyId,
+          ownerId: existingPayment.ownerId,
+        },
+      });
+
+      if (!property) {
+        return NextResponse.json(
+          { success: false, error: 'La propiedad no existe o no pertenece a este propietario' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Preparar datos para actualización
     const updateData: Record<string, unknown> = {};
 
@@ -85,6 +110,7 @@ export async function PUT(
     if (validatedData.paymentMethod !== undefined) updateData.paymentMethod = validatedData.paymentMethod;
     if (validatedData.referenceNumber !== undefined) updateData.referenceNumber = validatedData.referenceNumber;
     if (validatedData.notes !== undefined) updateData.notes = validatedData.notes;
+    if (validatedData.propertyId !== undefined) updateData.propertyId = validatedData.propertyId;
 
     // Actualizar el pago
     const payment = await prisma.ownerPayment.update({
@@ -96,6 +122,12 @@ export async function PUT(
             id: true,
             name: true,
             email: true,
+          },
+        },
+        property: {
+          select: {
+            id: true,
+            title: true,
           },
         },
       },
@@ -113,7 +145,7 @@ export async function PUT(
       return NextResponse.json(
         {
           success: false,
-          error: 'Datos de entrada inválidos',
+          error: 'Datos de entrada invalidos',
           details: error.errors,
         },
         { status: 400 }
