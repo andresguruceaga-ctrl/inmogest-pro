@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { Footer } from '@/components/layout/footer'
@@ -10,64 +10,50 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { 
-  Wallet, TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight,
-  ChevronDown, ChevronUp, Loader2, Plus, Minus, CheckCircle, Clock, Receipt, Edit, MoreHorizontal, Building2
-} from 'lucide-react'
+import { Receipt, Plus, Search, Filter, MoreHorizontal, Eye, Calendar, Building2, ArrowUpRight, ArrowDownRight, Loader2, Trash2, Edit } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useToast } from '@/hooks/use-toast'
-import { cn } from '@/lib/utils'
+import { Separator } from '@/components/ui/separator'
 
-interface PropertyBalance {
-  property: {
-    id: string
-    title: string
-    address: string
-  }
-  owner: {
-    id: string
-    name: string
-    email: string
-    phone: string | null
-  }
-  pendingExpenses: Array<{
-    id: string
-    description: string
-    amount: number
-    date: string
-    category: string
-    property: { id: string; title: string }
-  }>
-  ownerPayments: Array<{
-    id: string
-    amount: number
-    date: string
-    method: string | null
-    reference: string | null
-    notes: string | null
-  }>
-  totals: {
-    pending: number
-    payments: number
-    balance: number
-  }
+interface Expense {
+  id: string
+  title: string
+  description: string | null
+  category: string
+  expenseType: string
+  amount: number
+  invoiceNumber: string | null
+  supplier: string | null
+  expenseDate: string
+  paidByAdmin: boolean
+  reimbursedByOwner: boolean
+  property: { id: string; title: string; address: string } | null
 }
 
-interface BalanceData {
-  properties: PropertyBalance[]
-  totals: {
-    totalPending: number
-    totalPayments: number
-    totalBalance: number
-  }
+interface Property {
+  id: string
+  title: string
+  address: string
 }
 
-const categoryLabels: Record<string, string> = {
+const EXPENSE_CATEGORIES = [
+  'MANTENIMIENTO_PH',
+  'SEGURO',
+  'SERVICIOS_BASICOS',
+  'REPARACION',
+  'SERVICIO_TECNICO',
+  'IMPUESTOS',
+  'COMISION_ADMIN',
+  'OTROS',
+] as const
+
+const EXPENSE_TYPES = ['FIJO', 'VARIABLE'] as const
+
+const CATEGORY_LABELS: Record<string, string> = {
   MANTENIMIENTO_PH: 'Mantenimiento PH',
   SEGURO: 'Seguro',
   SERVICIOS_BASICOS: 'Servicios Basicos',
@@ -78,54 +64,62 @@ const categoryLabels: Record<string, string> = {
   OTROS: 'Otros',
 }
 
-const paymentMethods = [
-  { value: 'TRANSFERENCIA', label: 'Transferencia Bancaria' },
-  { value: 'EFECTIVO', label: 'Efectivo' },
-  { value: 'CHEQUE', label: 'Cheque' },
-  { value: 'YAPE', label: 'Yape' },
-  { value: 'OTRO', label: 'Otro' },
-]
-
-export default function RelacionGastosPage() {
-  const { toast } = useToast()
+export default function GastosPage() {
+  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
-  const [data, setData] = useState<BalanceData | null>(null)
-  const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set())
-  
-  // Payment dialog
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
-  const [selectedProperty, setSelectedProperty] = useState<PropertyBalance | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  
-  // Edit payment dialog
-  const [editPaymentDialogOpen, setEditPaymentDialogOpen] = useState(false)
-  const [editingPayment, setEditingPayment] = useState<{ id: string; amount: number; date: string; method: string | null; reference: string | null; notes: string | null; propertyId: string; ownerId: string } | null>(null)
-  
-  // Delete payment dialog
-  const [deletePaymentDialogOpen, setDeletePaymentDialogOpen] = useState(false)
-  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState(false)
-  
-  const [paymentForm, setPaymentForm] = useState({
-    amount: '',
-    paymentDate: new Date().toISOString().split('T')[0],
-    paymentMethod: '',
-    referenceNumber: '',
-    notes: '',
-    propertyId: '',
+  const [summary, setSummary] = useState({
+    totalExpenses: 0,
+    byType: { FIJO: { count: 0, total: 0 }, VARIABLE: { count: 0, total: 0 } }
   })
-  
-  const [editPaymentForm, setEditPaymentForm] = useState({
+  const { toast } = useToast()
+
+  // Detail dialog state
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
+
+  // Edit dialog state
+  const [editOpen, setEditOpen] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  const [editFormData, setEditFormData] = useState({
+    title: '',
+    description: '',
+    category: 'OTROS' as typeof EXPENSE_CATEGORIES[number],
+    expenseType: 'VARIABLE' as typeof EXPENSE_TYPES[number],
     amount: '',
-    paymentDate: '',
-    paymentMethod: '',
-    referenceNumber: '',
-    notes: '',
+    invoiceNumber: '',
+    supplier: '',
+    expenseDate: '',
     propertyId: '',
+    paidByAdmin: false,
   })
 
-  // Get properties for the selected owner (to show selector if more than 1)
-  const [ownerProperties, setOwnerProperties] = useState<Array<{ id: string; title: string }>>([])
+  // Delete confirmation state
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    category: 'MANTENIMIENTO_PH' as typeof EXPENSE_CATEGORIES[number],
+    expenseType: 'VARIABLE' as typeof EXPENSE_TYPES[number],
+    amount: '',
+    invoiceNumber: '',
+    supplier: '',
+    expenseDate: '',
+    propertyId: '',
+    paidByAdmin: false,
+  })
+
+  // Memoized valid property ID for edit form
+  const validEditPropertyId = useMemo(() => {
+    if (!editFormData.propertyId) return ''
+    const exists = properties.some(p => p.id === editFormData.propertyId)
+    return exists ? editFormData.propertyId : ''
+  }, [editFormData.propertyId, properties])
 
   useEffect(() => {
     fetchData()
@@ -133,67 +127,33 @@ export default function RelacionGastosPage() {
 
   const fetchData = async () => {
     try {
-      const response = await fetch('/api/owner-balance')
-      const result = await response.json()
-      
-      if (result.success) {
-        setData(result.data)
-      } else {
-        toast({
-          title: 'Error',
-          description: result.error || 'No se pudo cargar la informacion',
-          variant: 'destructive',
-        })
+      const [expensesRes, propertiesRes] = await Promise.all([
+        fetch('/api/expenses'),
+        fetch('/api/properties'),
+      ])
+
+      if (expensesRes.ok) {
+        const data = await expensesRes.json()
+        setExpenses(data.data || [])
+        if (data.summary) {
+          setSummary(data.summary)
+        }
+      }
+      if (propertiesRes.ok) {
+        const data = await propertiesRes.json()
+        setProperties(data.properties || data.data || [])
       }
     } catch (error) {
-      console.error('Error fetching balance:', error)
-      toast({
-        title: 'Error',
-        description: 'Error de conexion',
-        variant: 'destructive',
-      })
+      console.error('Error fetching data:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const togglePropertyExpand = (propertyId: string) => {
-    setExpandedProperties(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(propertyId)) {
-        newSet.delete(propertyId)
-      } else {
-        newSet.add(propertyId)
-      }
-      return newSet
-    })
-  }
-
-  const openPaymentDialog = async (property: PropertyBalance) => {
-    setSelectedProperty(property)
-    
-    // Get all properties for this owner
-    const ownerProps = data?.properties
-      .filter(p => p.owner.id === property.owner.id)
-      .map(p => ({ id: p.property.id, title: p.property.title })) || []
-    
-    setOwnerProperties(ownerProps)
-    
-    setPaymentForm({
-      amount: '',
-      paymentDate: new Date().toISOString().split('T')[0],
-      paymentMethod: '',
-      referenceNumber: '',
-      notes: '',
-      propertyId: ownerProps.length === 1 ? ownerProps[0].id : '',
-    })
-    setPaymentDialogOpen(true)
-  }
-
-  const handlePaymentSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!selectedProperty || !paymentForm.amount) {
+    if (!formData.title || !formData.amount || !formData.expenseDate || !formData.propertyId) {
       toast({
         title: 'Error',
         description: 'Por favor completa todos los campos requeridos',
@@ -202,45 +162,42 @@ export default function RelacionGastosPage() {
       return
     }
 
-    // Si el owner tiene mas de 1 propiedad, propertyId es requerido
-    if (ownerProperties.length > 1 && !paymentForm.propertyId) {
-      toast({
-        title: 'Error',
-        description: 'Por favor selecciona la propiedad',
-        variant: 'destructive',
-      })
-      return
-    }
-
     setSaving(true)
+
     try {
-      const response = await fetch('/api/owner-payments', {
+      const response = await fetch('/api/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ownerId: selectedProperty.owner.id,
-          propertyId: paymentForm.propertyId || selectedProperty.property.id,
-          amount: parseFloat(paymentForm.amount),
-          paymentDate: paymentForm.paymentDate,
-          paymentMethod: paymentForm.paymentMethod || null,
-          referenceNumber: paymentForm.referenceNumber || null,
-          notes: paymentForm.notes || null,
+          title: formData.title,
+          description: formData.description || null,
+          category: formData.category,
+          expenseType: formData.expenseType,
+          amount: parseFloat(formData.amount),
+          invoiceNumber: formData.invoiceNumber || null,
+          supplier: formData.supplier || null,
+          expenseDate: formData.expenseDate,
+          propertyId: formData.propertyId,
+          paidByAdmin: formData.paidByAdmin,
         }),
       })
 
-      const result = await response.json()
+      const data = await response.json()
 
-      if (result.success) {
+      if (response.ok) {
         toast({
-          title: 'Pago registrado',
-          description: 'El pago se ha registrado exitosamente.',
+          title: 'Gasto registrado',
+          description: formData.paidByAdmin 
+            ? 'El gasto se ha registrado como pagado por el administrador. Aparecera en Relacion de Gastos.'
+            : 'El gasto se ha registrado exitosamente.',
         })
-        setPaymentDialogOpen(false)
+        setDialogOpen(false)
+        resetForm()
         fetchData()
       } else {
         toast({
           title: 'Error',
-          description: result.error || 'No se pudo registrar el pago',
+          description: data.error || 'No se pudo registrar el gasto',
           variant: 'destructive',
         })
       }
@@ -255,74 +212,104 @@ export default function RelacionGastosPage() {
     }
   }
 
-  const openEditPaymentDialog = (payment: { id: string; amount: number; date: string; method: string | null; reference: string | null; notes: string | null }, propertyId: string, ownerId: string) => {
-    setEditingPayment({ ...payment, propertyId, ownerId })
-    
-    // Get all properties for this owner
-    const ownerProps = data?.properties
-      .filter(p => p.owner.id === ownerId)
-      .map(p => ({ id: p.property.id, title: p.property.title })) || []
-    
-    setOwnerProperties(ownerProps)
-    
-    setEditPaymentForm({
-      amount: String(payment.amount),
-      paymentDate: payment.date ? new Date(payment.date).toISOString().split('T')[0] : '',
-      paymentMethod: payment.method || '',
-      referenceNumber: payment.reference || '',
-      notes: payment.notes || '',
-      propertyId: propertyId,
-    })
-    setEditPaymentDialogOpen(true)
-  }
-
-  const handleEditPaymentSubmit = async (e: React.FormEvent) => {
+  const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!editingPayment || !editPaymentForm.amount) {
+    if (!editingExpense) {
       toast({
         title: 'Error',
-        description: 'Por favor completa todos los campos requeridos',
+        description: 'No hay gasto seleccionado para editar',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!editFormData.title?.trim()) {
+      toast({
+        title: 'Error',
+        description: 'El titulo es requerido',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!editFormData.amount || isNaN(parseFloat(editFormData.amount))) {
+      toast({
+        title: 'Error',
+        description: 'El monto debe ser un numero valido',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!editFormData.expenseDate) {
+      toast({
+        title: 'Error',
+        description: 'La fecha del gasto es requerida',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!editFormData.propertyId) {
+      toast({
+        title: 'Error',
+        description: 'Debe seleccionar una propiedad',
         variant: 'destructive',
       })
       return
     }
 
     setSaving(true)
+
     try {
-      const response = await fetch(`/api/owner-payments/${editingPayment.id}`, {
+      const parsedAmount = parseFloat(editFormData.amount)
+      
+      const response = await fetch(`/api/expenses/${editingExpense.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: parseFloat(editPaymentForm.amount),
-          paymentDate: editPaymentForm.paymentDate,
-          paymentMethod: editPaymentForm.paymentMethod || null,
-          referenceNumber: editPaymentForm.referenceNumber || null,
-          notes: editPaymentForm.notes || null,
-          propertyId: editPaymentForm.propertyId || null,
+          title: editFormData.title.trim(),
+          description: editFormData.description?.trim() || null,
+          category: editFormData.category,
+          expenseType: editFormData.expenseType,
+          amount: parsedAmount,
+          invoiceNumber: editFormData.invoiceNumber?.trim() || null,
+          supplier: editFormData.supplier?.trim() || null,
+          expenseDate: editFormData.expenseDate,
+          propertyId: editFormData.propertyId,
+          paidByAdmin: editFormData.paidByAdmin,
         }),
       })
 
-      const result = await response.json()
+      let data
+      try {
+        data = await response.json()
+      } catch {
+        throw new Error('El servidor no respondio correctamente. Por favor, intenta de nuevo.')
+      }
 
-      if (result.success) {
+      if (response.ok) {
         toast({
-          title: 'Pago actualizado',
-          description: 'El pago se ha actualizado exitosamente.',
+          title: 'Gasto actualizado',
+          description: 'El gasto se ha actualizado exitosamente.',
         })
-        setEditPaymentDialogOpen(false)
+        setEditOpen(false)
+        setEditingExpense(null)
         fetchData()
       } else {
+        const errorMessage = data.error || data.message || 'No se pudo actualizar el gasto'
         toast({
           title: 'Error',
-          description: result.error || 'No se pudo actualizar el pago',
+          description: errorMessage,
           variant: 'destructive',
         })
       }
     } catch (error) {
+      console.error('Error updating expense:', error)
       toast({
         title: 'Error',
-        description: 'Error de conexion',
+        description: error instanceof Error ? error.message : 'Error de conexion. Por favor, intenta de nuevo.',
         variant: 'destructive',
       })
     } finally {
@@ -330,34 +317,30 @@ export default function RelacionGastosPage() {
     }
   }
 
-  const openDeletePaymentDialog = (paymentId: string) => {
-    setDeletingPaymentId(paymentId)
-    setDeletePaymentDialogOpen(true)
-  }
-
-  const handleDeletePayment = async () => {
-    if (!deletingPaymentId) return
-
+  const handleDelete = async () => {
+    if (!deletingId) return
+    
     setDeleting(true)
+
     try {
-      const response = await fetch(`/api/owner-payments/${deletingPaymentId}`, {
+      const response = await fetch(`/api/expenses/${deletingId}`, {
         method: 'DELETE',
       })
 
-      const result = await response.json()
+      const data = await response.json()
 
-      if (result.success) {
+      if (response.ok) {
         toast({
-          title: 'Pago eliminado',
-          description: 'El pago se ha eliminado exitosamente.',
+          title: 'Gasto eliminado',
+          description: 'El gasto se ha eliminado exitosamente.',
         })
-        setDeletePaymentDialogOpen(false)
-        setDeletingPaymentId(null)
+        setDeleteOpen(false)
+        setDeletingId(null)
         fetchData()
       } else {
         toast({
           title: 'Error',
-          description: result.error || 'No se pudo eliminar el pago',
+          description: data.error || 'No se pudo eliminar el gasto',
           variant: 'destructive',
         })
       }
@@ -372,27 +355,98 @@ export default function RelacionGastosPage() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-PA', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount)
+  const openDetail = (expense: Expense) => {
+    setSelectedExpense(expense)
+    setDetailOpen(true)
   }
 
-  if (loading) {
-    return (
-      <SidebarProvider>
-        <Sidebar />
-        <SidebarInset className="flex flex-col min-h-screen">
-          <Header />
-          <main className="flex-1 flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </main>
-          <Footer />
-        </SidebarInset>
-      </SidebarProvider>
-    )
+  const openEdit = (expense: Expense) => {
+    if (!expense) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo cargar el gasto para editar',
+        variant: 'destructive',
+      })
+      return
+    }
+    
+    setEditingExpense(expense)
+    
+    const propertyId = expense.property?.id || ''
+    
+    let expenseDateStr = ''
+    try {
+      if (expense.expenseDate) {
+        const date = new Date(expense.expenseDate)
+        if (!isNaN(date.getTime())) {
+          expenseDateStr = date.toISOString().split('T')[0]
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing expense date:', e)
+    }
+
+    const category = EXPENSE_CATEGORIES.includes(expense.category as typeof EXPENSE_CATEGORIES[number])
+      ? expense.category as typeof EXPENSE_CATEGORIES[number]
+      : 'OTROS'
+
+    const expenseType = EXPENSE_TYPES.includes(expense.expenseType as typeof EXPENSE_TYPES[number])
+      ? expense.expenseType as typeof EXPENSE_TYPES[number]
+      : 'VARIABLE'
+    
+    setEditFormData({
+      title: expense.title || '',
+      description: expense.description || '',
+      category,
+      expenseType,
+      amount: String(expense.amount ?? 0),
+      invoiceNumber: expense.invoiceNumber || '',
+      supplier: expense.supplier || '',
+      expenseDate: expenseDateStr,
+      propertyId: propertyId,
+      paidByAdmin: expense.paidByAdmin || false,
+    })
+    setEditOpen(true)
   }
+
+  const openDelete = (id: string) => {
+    setDeletingId(id)
+    setDeleteOpen(true)
+  }
+
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      category: 'MANTENIMIENTO_PH',
+      expenseType: 'VARIABLE',
+      amount: '',
+      invoiceNumber: '',
+      supplier: '',
+      expenseDate: '',
+      propertyId: '',
+      paidByAdmin: false,
+    })
+  }
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return 'N/A'
+    try {
+      return new Date(dateStr).toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' })
+    } catch {
+      return 'N/A'
+    }
+  }
+
+  const getCategoryLabel = (category: string) => {
+    return CATEGORY_LABELS[category] || category
+  }
+
+  const summaryCards = [
+    { label: 'Gastos Fijos', value: summary.byType.FIJO.total, trend: 'up' },
+    { label: 'Gastos Variables', value: summary.byType.VARIABLE.total, trend: 'down' },
+    { label: 'Total', value: summary.totalExpenses, trend: 'up' },
+  ]
 
   return (
     <SidebarProvider>
@@ -404,494 +458,513 @@ export default function RelacionGastosPage() {
           <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Relacion de Gastos</h1>
-                <p className="text-muted-foreground">Balance de gastos entre administracion y propietarios por propiedad</p>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Gastos</h1>
+                <p className="text-muted-foreground">Control de gastos fijos y variables</p>
               </div>
+              <Button onClick={() => setDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nuevo Gasto
+              </Button>
             </div>
 
-            {/* Summary Cards - 3 tarjetas: Gastos, Pagos, Balance */}
-            {data && (
-              <div className="grid gap-4 md:grid-cols-3">
-                <Card>
+            <div className="grid gap-4 md:grid-cols-3">
+              {summaryCards.map((item, i) => (
+                <Card key={i}>
                   <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Gastos</p>
-                        <p className="text-2xl font-bold text-red-500">{formatCurrency(data.totals.totalPending)}</p>
-                        <p className="text-xs text-muted-foreground">Por cobrar a propietarios</p>
-                      </div>
-                      <div className="h-12 w-12 rounded-xl bg-red-500/10 flex items-center justify-center">
-                        <TrendingDown className="h-6 w-6 text-red-500" />
-                      </div>
+                    <p className="text-sm text-muted-foreground">{item.label}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-2xl font-bold">${item.value.toLocaleString()}</span>
+                      {item.trend === 'up' && <ArrowUpRight className="h-4 w-4 text-red-500" />}
+                      {item.trend === 'down' && <ArrowDownRight className="h-4 w-4 text-emerald-500" />}
                     </div>
                   </CardContent>
                 </Card>
+              ))}
+            </div>
 
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Pagos</p>
-                        <p className="text-2xl font-bold text-blue-500">{formatCurrency(data.totals.totalPayments)}</p>
-                        <p className="text-xs text-muted-foreground">Pagos de propietarios</p>
-                      </div>
-                      <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                        <DollarSign className="h-6 w-6 text-blue-500" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Balance</p>
-                        <p className={cn(
-                          "text-2xl font-bold",
-                          data.totals.totalBalance >= 0 ? "text-green-500" : "text-red-500"
-                        )}>
-                          {formatCurrency(data.totals.totalBalance)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {data.totals.totalBalance >= 0 ? "Saldo a favor de admin" : "Saldo a favor de propietarios"}
-                        </p>
-                      </div>
-                      <div className={cn(
-                        "h-12 w-12 rounded-xl flex items-center justify-center",
-                        data.totals.totalBalance >= 0 ? "bg-green-500/10" : "bg-red-500/10"
-                      )}>
-                        <Wallet className={cn(
-                          "h-6 w-6",
-                          data.totals.totalBalance >= 0 ? "text-green-500" : "text-red-500"
-                        )} />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {/* Properties Detail */}
-            {data && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Balance por Propiedad</CardTitle>
-                  <CardDescription>
-                    {data.properties.length} propiedades con movimientos
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {data.properties.map((propertyBalance) => (
-                      <div key={propertyBalance.property.id} className="border rounded-lg overflow-hidden">
-                        {/* Property Header */}
-                        <button
-                          className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                          onClick={() => togglePropertyExpand(propertyBalance.property.id)}
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className={cn(
-                              "h-10 w-10 rounded-lg flex items-center justify-center",
-                              propertyBalance.totals.balance >= 0 
-                                ? "bg-green-500/10" 
-                                : "bg-red-500/10"
-                            )}>
-                              <Building2 className={cn(
-                                "h-5 w-5",
-                                propertyBalance.totals.balance >= 0 
-                                  ? "text-green-500" 
-                                  : "text-red-500"
-                              )} />
-                            </div>
-                            <div className="text-left">
-                              <p className="font-medium">{propertyBalance.property.title}</p>
-                              <p className="text-sm text-muted-foreground">
-                                Propietario: {propertyBalance.owner.name}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <p className={cn(
-                                "font-bold",
-                                propertyBalance.totals.balance >= 0 ? "text-green-500" : "text-red-500"
-                              )}>
-                                {formatCurrency(propertyBalance.totals.balance)}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {propertyBalance.totals.balance >= 0 ? "Saldo a favor" : "Debe"}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  openPaymentDialog(propertyBalance)
-                                }}
-                              >
-                                <Plus className="h-4 w-4 mr-1" />
-                                Pago
-                              </Button>
-                              {expandedProperties.has(propertyBalance.property.id) ? (
-                                <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                              ) : (
-                                <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                              )}
-                            </div>
-                          </div>
-                        </button>
-
-                        {/* Expanded Details */}
-                        {expandedProperties.has(propertyBalance.property.id) && (
-                          <div className="border-t p-4 space-y-6 bg-muted/30">
-                            {/* Summary - 3 columnas: Gastos, Pagos, Balance */}
-                            <div className="grid grid-cols-3 gap-4">
-                              <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/10">
-                                <p className="text-xs text-muted-foreground">Gastos</p>
-                                <p className="text-lg font-bold text-red-500">{formatCurrency(propertyBalance.totals.pending)}</p>
-                              </div>
-                              <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
-                                <p className="text-xs text-muted-foreground">Pagos</p>
-                                <p className="text-lg font-bold text-blue-500">{formatCurrency(propertyBalance.totals.payments)}</p>
-                              </div>
-                              <div className={cn(
-                                "p-3 rounded-lg border",
-                                propertyBalance.totals.balance >= 0 
-                                  ? "bg-green-500/5 border-green-500/10" 
-                                  : "bg-red-500/5 border-red-500/10"
-                              )}>
-                                <p className="text-xs text-muted-foreground">Balance</p>
-                                <p className={cn(
-                                  "text-lg font-bold",
-                                  propertyBalance.totals.balance >= 0 ? "text-green-500" : "text-red-500"
-                                )}>
-                                  {formatCurrency(propertyBalance.totals.balance)}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Pending Expenses */}
-                            {propertyBalance.pendingExpenses.length > 0 && (
-                              <div>
-                                <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                                  <Clock className="h-4 w-4 text-red-500" />
-                                  Gastos Pendientes de Reembolso ({propertyBalance.pendingExpenses.length})
-                                </h4>
-                                <div className="bg-white rounded-lg border overflow-hidden">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead>Descripcion</TableHead>
-                                        <TableHead>Categoria</TableHead>
-                                        <TableHead>Fecha</TableHead>
-                                        <TableHead className="text-right">Monto</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {propertyBalance.pendingExpenses.map((expense) => (
-                                        <TableRow key={expense.id}>
-                                          <TableCell>{expense.description}</TableCell>
-                                          <TableCell>
-                                            <Badge variant="outline" className="text-xs">
-                                              {categoryLabels[expense.category] || expense.category}
-                                            </Badge>
-                                          </TableCell>
-                                          <TableCell className="text-muted-foreground">
-                                            {new Date(expense.date).toLocaleDateString('es-PA')}
-                                          </TableCell>
-                                          <TableCell className="text-right font-medium text-red-500">
-                                            {formatCurrency(expense.amount)}
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                      <TableRow className="bg-muted/50">
-                                        <TableCell colSpan={3} className="font-medium">Total Gastos</TableCell>
-                                        <TableCell className="text-right font-bold text-red-500">
-                                          {formatCurrency(propertyBalance.totals.pending)}
-                                        </TableCell>
-                                      </TableRow>
-                                    </TableBody>
-                                  </Table>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Owner Payments */}
-                            {propertyBalance.ownerPayments.length > 0 && (
-                              <div>
-                                <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                                  <Receipt className="h-4 w-4 text-blue-500" />
-                                  Pagos del Propietario ({propertyBalance.ownerPayments.length})
-                                </h4>
-                                <div className="bg-white rounded-lg border overflow-hidden">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead>Fecha</TableHead>
-                                        <TableHead>Metodo</TableHead>
-                                        <TableHead>Referencia</TableHead>
-                                        <TableHead>Notas</TableHead>
-                                        <TableHead className="text-right">Monto</TableHead>
-                                        <TableHead className="text-center">Acciones</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {propertyBalance.ownerPayments.map((payment) => (
-                                        <TableRow key={payment.id}>
-                                          <TableCell>{new Date(payment.date).toLocaleDateString('es-PA')}</TableCell>
-                                          <TableCell>{payment.method || 'N/A'}</TableCell>
-                                          <TableCell>{payment.reference || 'N/A'}</TableCell>
-                                          <TableCell className="text-muted-foreground">{payment.notes || 'N/A'}</TableCell>
-                                          <TableCell className="text-right font-medium text-green-500">
-                                            +{formatCurrency(payment.amount)}
-                                          </TableCell>
-                                          <TableCell className="text-center">
-                                            <DropdownMenu>
-                                              <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                  <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                              </DropdownMenuTrigger>
-                                              <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={() => openEditPaymentDialog(payment, propertyBalance.property.id, propertyBalance.owner.id)}>
-                                                  <Edit className="h-4 w-4 mr-2" />
-                                                  Editar
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem 
-                                                  className="text-destructive"
-                                                  onClick={() => openDeletePaymentDialog(payment.id)}
-                                                >
-                                                  Eliminar
-                                                </DropdownMenuItem>
-                                              </DropdownMenuContent>
-                                            </DropdownMenu>
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                      <TableRow className="bg-muted/50">
-                                        <TableCell colSpan={4} className="font-medium">Total Pagos</TableCell>
-                                        <TableCell className="text-right font-bold text-green-500">
-                                          {formatCurrency(propertyBalance.totals.payments)}
-                                        </TableCell>
-                                      </TableRow>
-                                    </TableBody>
-                                  </Table>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Empty state */}
-                            {propertyBalance.pendingExpenses.length === 0 && propertyBalance.ownerPayments.length === 0 && (
-                              <div className="text-center py-8 text-muted-foreground">
-                                <Wallet className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                <p>No hay movimientos registrados</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-
-                    {data.properties.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No hay propiedades con movimientos registrados</p>
-                      </div>
-                    )}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Buscar gastos..." className="pl-9" />
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                  <Button variant="outline">
+                    <Filter className="h-4 w-4 mr-2" />
+                    Filtros
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Historial de Gastos</CardTitle>
+                <CardDescription>{expenses.length} gastos registrados</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : expenses.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No hay gastos registrados</p>
+                    <p className="text-sm">Haz clic en "Nuevo Gasto" para agregar uno</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead>Propiedad</TableHead>
+                        <TableHead className="hidden md:table-cell">Categoria</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Monto</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {expenses.map((expense) => (
+                        <TableRow key={expense.id}>
+                          <TableCell className="text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {formatDate(expense.expenseDate)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                              <span className="truncate max-w-[150px]">{expense.property?.title || 'N/A'}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">{getCategoryLabel(expense.category)}</TableCell>
+                          <TableCell>
+                            <Badge variant={expense.expenseType === 'FIJO' ? 'outline' : 'secondary'}>
+                              {expense.expenseType === 'FIJO' ? 'Fijo' : 'Variable'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {expense.paidByAdmin ? (
+                              <Badge variant="default" className="bg-orange-500">
+                                Pagado por Admin
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-green-600">
+                                Gasto Propiedad
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium text-red-500">
+                            -${expense.amount.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openDetail(expense)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Ver detalle
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openEdit(expense)}>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={() => openDelete(expense.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </main>
         
         <Footer />
       </SidebarInset>
 
-      {/* Payment Dialog */}
-      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
-        <DialogContent className="max-w-md">
+      {/* Dialog para Nuevo Gasto */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Registrar Pago de Propietario</DialogTitle>
+            <DialogTitle>Nuevo Gasto</DialogTitle>
             <DialogDescription>
-              Propietario: {selectedProperty?.owner.name}
+              Registra un nuevo gasto para una propiedad.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handlePaymentSubmit} className="space-y-4">
-            {/* Selector de propiedad - solo si tiene mas de 1 */}
-            {ownerProperties.length > 1 && (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="title">Titulo *</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({...formData, title: e.target.value})}
+                  placeholder="Ej: Mantenimiento mensual PH"
+                  required
+                />
+              </div>
               <div className="space-y-2">
-                <Label>Propiedad *</Label>
-                <Select 
-                  value={paymentForm.propertyId} 
-                  onValueChange={(v) => setPaymentForm({ ...paymentForm, propertyId: v })}
-                >
+                <Label htmlFor="propertyId">Propiedad *</Label>
+                <Select value={formData.propertyId || undefined} onValueChange={(v) => setFormData({...formData, propertyId: v})}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar propiedad" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ownerProperties.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
+                    {properties.map((prop) => (
+                      <SelectItem key={prop.id} value={prop.id}>{prop.title}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            )}
+              <div className="space-y-2">
+                <Label htmlFor="category">Categoria *</Label>
+                <Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as typeof EXPENSE_CATEGORIES[number]})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXPENSE_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{CATEGORY_LABELS[cat]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="expenseType">Tipo *</Label>
+                <Select value={formData.expenseType} onValueChange={(v) => setFormData({...formData, expenseType: v as typeof EXPENSE_TYPES[number]})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FIJO">Fijo</SelectItem>
+                    <SelectItem value="VARIABLE">Variable</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="amount">Monto (USD) *</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                  placeholder="250.00"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="expenseDate">Fecha del Gasto *</Label>
+                <Input
+                  id="expenseDate"
+                  type="date"
+                  value={formData.expenseDate}
+                  onChange={(e) => setFormData({...formData, expenseDate: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoiceNumber">Numero de Factura</Label>
+                <Input
+                  id="invoiceNumber"
+                  value={formData.invoiceNumber}
+                  onChange={(e) => setFormData({...formData, invoiceNumber: e.target.value})}
+                  placeholder="Ej: INV-001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="supplier">Proveedor</Label>
+                <Input
+                  id="supplier"
+                  value={formData.supplier}
+                  onChange={(e) => setFormData({...formData, supplier: e.target.value})}
+                  placeholder="Ej: Empresa ABC"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Descripcion</Label>
+              <textarea
+                id="description"
+                className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                placeholder="Detalles adicionales del gasto..."
+              />
+            </div>
             
-            <div className="space-y-2">
-              <Label>Monto *</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={paymentForm.amount}
-                onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                placeholder="0.00"
-                required
-              />
+            {/* CHECKBOX: Gasto pagado por administrador */}
+            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="paidByAdmin"
+                  checked={formData.paidByAdmin}
+                  onChange={(e) => setFormData({...formData, paidByAdmin: e.target.checked})}
+                  className="rounded border-gray-300 mt-1"
+                />
+                <div>
+                  <Label htmlFor="paidByAdmin" className="font-medium cursor-pointer">
+                    Gasto pagado por el Administrador
+                  </Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Marca esta opcion si el gasto fue pagado por la administracion y el propietario debe reembolsarlo. 
+                    Aparecera en la seccion de "Relacion de Gastos".
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Fecha *</Label>
-              <Input
-                type="date"
-                value={paymentForm.paymentDate}
-                onChange={(e) => setPaymentForm({ ...paymentForm, paymentDate: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Metodo de Pago</Label>
-              <Select 
-                value={paymentForm.paymentMethod} 
-                onValueChange={(v) => setPaymentForm({ ...paymentForm, paymentMethod: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar metodo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentMethods.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Numero de Referencia</Label>
-              <Input
-                value={paymentForm.referenceNumber}
-                onChange={(e) => setPaymentForm({ ...paymentForm, referenceNumber: e.target.value })}
-                placeholder="Ej: TRANS-123456"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Notas</Label>
-              <Textarea
-                value={paymentForm.notes}
-                onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-                placeholder="Notas adicionales..."
-                rows={2}
-              />
-            </div>
+            
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setPaymentDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancelar
               </Button>
               <Button type="submit" disabled={saving}>
                 {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Registrar Pago
+                Guardar Gasto
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Payment Dialog */}
-      <Dialog open={editPaymentDialogOpen} onOpenChange={setEditPaymentDialogOpen}>
-        <DialogContent className="max-w-md">
+      {/* Dialog para Ver Detalle */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Editar Pago de Propietario</DialogTitle>
+            <DialogTitle>Detalle del Gasto</DialogTitle>
+          </DialogHeader>
+          {selectedExpense && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Titulo</p>
+                  <p className="font-medium">{selectedExpense.title}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha</p>
+                  <p className="font-medium">{formatDate(selectedExpense.expenseDate)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Propiedad</p>
+                  <p className="font-medium">{selectedExpense.property?.title || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Categoria</p>
+                  <p className="font-medium">{getCategoryLabel(selectedExpense.category)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Tipo</p>
+                  <Badge variant={selectedExpense.expenseType === 'FIJO' ? 'outline' : 'secondary'}>
+                    {selectedExpense.expenseType === 'FIJO' ? 'Fijo' : 'Variable'}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Proveedor</p>
+                  <p className="font-medium">{selectedExpense.supplier || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Estado</p>
+                  {selectedExpense.paidByAdmin ? (
+                    <Badge variant="default" className="bg-orange-500">Pagado por Admin</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-green-600">Gasto Propiedad</Badge>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Monto</p>
+                  <p className="font-bold text-lg text-red-500">${selectedExpense.amount.toLocaleString()}</p>
+                </div>
+              </div>
+
+              {selectedExpense.description && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Descripcion</p>
+                    <p className="text-sm bg-muted/50 rounded-lg p-3">{selectedExpense.description}</p>
+                  </div>
+                </>
+              )}
+
+              {selectedExpense.invoiceNumber && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Numero de Factura</p>
+                  <p className="font-medium">{selectedExpense.invoiceNumber}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailOpen(false)}>
+              Cerrar
+            </Button>
+            <Button onClick={() => {
+              setDetailOpen(false)
+              if (selectedExpense) openEdit(selectedExpense)
+            }}>
+              <Edit className="h-4 w-4 mr-2" />
+              Editar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para Editar Gasto */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Gasto</DialogTitle>
             <DialogDescription>
-              Modifica los datos del pago
+              Modifica los datos del gasto.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditPaymentSubmit} className="space-y-4">
-            {/* Selector de propiedad - solo si tiene mas de 1 */}
-            {ownerProperties.length > 1 && (
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="edit-title">Titulo *</Label>
+                <Input
+                  id="edit-title"
+                  value={editFormData.title}
+                  onChange={(e) => setEditFormData({...editFormData, title: e.target.value})}
+                  placeholder="Ej: Mantenimiento mensual PH"
+                  required
+                />
+              </div>
               <div className="space-y-2">
-                <Label>Propiedad</Label>
+                <Label htmlFor="edit-propertyId">Propiedad *</Label>
                 <Select 
-                  value={editPaymentForm.propertyId} 
-                  onValueChange={(v) => setEditPaymentForm({ ...editPaymentForm, propertyId: v })}
+                  value={validEditPropertyId || undefined} 
+                  onValueChange={(v) => setEditFormData({...editFormData, propertyId: v})}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar propiedad" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ownerProperties.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
+                    {properties.map((prop) => (
+                      <SelectItem key={prop.id} value={prop.id}>{prop.title}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            )}
+              <div className="space-y-2">
+                <Label htmlFor="edit-category">Categoria *</Label>
+                <Select value={editFormData.category} onValueChange={(v) => setEditFormData({...editFormData, category: v as typeof EXPENSE_CATEGORIES[number]})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXPENSE_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{CATEGORY_LABELS[cat]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-expenseType">Tipo *</Label>
+                <Select value={editFormData.expenseType} onValueChange={(v) => setEditFormData({...editFormData, expenseType: v as typeof EXPENSE_TYPES[number]})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FIJO">Fijo</SelectItem>
+                    <SelectItem value="VARIABLE">Variable</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-amount">Monto (USD) *</Label>
+                <Input
+                  id="edit-amount"
+                  type="number"
+                  step="0.01"
+                  value={editFormData.amount}
+                  onChange={(e) => setEditFormData({...editFormData, amount: e.target.value})}
+                  placeholder="250.00"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-expenseDate">Fecha del Gasto *</Label>
+                <Input
+                  id="edit-expenseDate"
+                  type="date"
+                  value={editFormData.expenseDate}
+                  onChange={(e) => setEditFormData({...editFormData, expenseDate: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-invoiceNumber">Numero de Factura</Label>
+                <Input
+                  id="edit-invoiceNumber"
+                  value={editFormData.invoiceNumber}
+                  onChange={(e) => setEditFormData({...editFormData, invoiceNumber: e.target.value})}
+                  placeholder="Ej: INV-001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-supplier">Proveedor</Label>
+                <Input
+                  id="edit-supplier"
+                  value={editFormData.supplier}
+                  onChange={(e) => setEditFormData({...editFormData, supplier: e.target.value})}
+                  placeholder="Ej: Empresa ABC"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Descripcion</Label>
+              <textarea
+                id="edit-description"
+                className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={editFormData.description}
+                onChange={(e) => setEditFormData({...editFormData, description: e.target.value})}
+                placeholder="Detalles adicionales del gasto..."
+              />
+            </div>
             
-            <div className="space-y-2">
-              <Label>Monto *</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={editPaymentForm.amount}
-                onChange={(e) => setEditPaymentForm({ ...editPaymentForm, amount: e.target.value })}
-                placeholder="0.00"
-                required
-              />
+            {/* CHECKBOX: Gasto pagado por administrador */}
+            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="edit-paidByAdmin"
+                  checked={editFormData.paidByAdmin}
+                  onChange={(e) => setEditFormData({...editFormData, paidByAdmin: e.target.checked})}
+                  className="rounded border-gray-300 mt-1"
+                />
+                <div>
+                  <Label htmlFor="edit-paidByAdmin" className="font-medium cursor-pointer">
+                    Gasto pagado por el Administrador
+                  </Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Si esta marcado, el gasto aparecera en "Relacion de Gastos" como pendiente de reembolso.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Fecha *</Label>
-              <Input
-                type="date"
-                value={editPaymentForm.paymentDate}
-                onChange={(e) => setEditPaymentForm({ ...editPaymentForm, paymentDate: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Metodo de Pago</Label>
-              <Select 
-                value={editPaymentForm.paymentMethod} 
-                onValueChange={(v) => setEditPaymentForm({ ...editPaymentForm, paymentMethod: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar metodo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentMethods.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Numero de Referencia</Label>
-              <Input
-                value={editPaymentForm.referenceNumber}
-                onChange={(e) => setEditPaymentForm({ ...editPaymentForm, referenceNumber: e.target.value })}
-                placeholder="Ej: TRANS-123456"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Notas</Label>
-              <Textarea
-                value={editPaymentForm.notes}
-                onChange={(e) => setEditPaymentForm({ ...editPaymentForm, notes: e.target.value })}
-                placeholder="Notas adicionales..."
-                rows={2}
-              />
-            </div>
+            
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditPaymentDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
                 Cancelar
               </Button>
               <Button type="submit" disabled={saving}>
@@ -903,19 +976,19 @@ export default function RelacionGastosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Payment Dialog */}
-      <AlertDialog open={deletePaymentDialogOpen} onOpenChange={setDeletePaymentDialogOpen}>
+      {/* Alert Dialog para Eliminar */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar pago?</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar gasto?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta accion no se puede deshacer. El pago sera eliminado permanentemente.
+              Esta accion no se puede deshacer. El gasto sera eliminado permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeletePayment}
+              onClick={handleDelete}
               disabled={deleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
