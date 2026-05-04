@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     // Obtener todas las propiedades con sus propietarios
     const properties = await db.property.findMany({
       where: {
-        ownerId: { not: null }, // Solo propiedades con propietario
+        ownerId: { not: null },
         ...(ownerId && { ownerId }),
         ...(propertyId && { id: propertyId }),
       },
@@ -27,10 +27,11 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Obtener gastos pagados por admin (paidByAdmin = true) agrupados por propiedad
+    // Obtener gastos pagados por admin (paidByAdmin = true) que no han sido reembolsados
     const adminExpenses = await db.expense.findMany({
       where: {
         paidByAdmin: true,
+        reimbursedByOwner: false,
         propertyId: { not: null },
         ...(propertyId && { propertyId }),
       },
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Obtener pagos de propietarios
+    // Obtener pagos de propietarios con propertyId
     const ownerPayments = await db.ownerPayment.findMany({
       where: {
         propertyId: { not: null },
@@ -103,12 +104,12 @@ export async function GET(request: NextRequest) {
 
       // Gastos pendientes de reembolso para esta propiedad
       const pendingExpenses = adminExpenses
-        .filter(e => e.propertyId === property.id && !e.reimbursedByOwner)
+        .filter(e => e.propertyId === property.id)
         .map(e => ({
           id: e.id,
-          description: e.description,
+          description: e.description || e.title,
           amount: e.amount,
-          date: e.date.toISOString(),
+          date: e.expenseDate.toISOString(),
           category: e.category,
         }));
 
