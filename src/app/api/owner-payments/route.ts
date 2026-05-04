@@ -5,6 +5,7 @@ import { z } from 'zod';
 // Esquema de validación
 const ownerPaymentSchema = z.object({
   ownerId: z.string().min(1, 'El propietario es requerido'),
+  propertyId: z.string().optional().nullable(), // Agregado: propiedad asociada al pago
   amount: z.number().min(0.01, 'El monto debe ser mayor a 0'),
   paymentDate: z.string().min(1, 'La fecha es requerida'),
   paymentMethod: z.string().optional().nullable(),
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const ownerId = searchParams.get('ownerId');
+    const propertyId = searchParams.get('propertyId'); // Agregado: filtrar por propiedad
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
@@ -25,6 +27,10 @@ export async function GET(request: NextRequest) {
     
     if (ownerId) {
       where.ownerId = ownerId;
+    }
+    
+    if (propertyId) {
+      where.propertyId = propertyId;
     }
     
     if (startDate || endDate) {
@@ -46,6 +52,13 @@ export async function GET(request: NextRequest) {
             name: true,
             email: true,
             phone: true,
+          },
+        },
+        property: {
+          select: {
+            id: true,
+            title: true,
+            address: true,
           },
         },
       },
@@ -83,9 +96,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Si se proporciona propertyId, verificar que existe y pertenece al propietario
+    if (validatedData.propertyId) {
+      const property = await db.property.findFirst({
+        where: {
+          id: validatedData.propertyId,
+          ownerId: validatedData.ownerId,
+        },
+      });
+
+      if (!property) {
+        return NextResponse.json(
+          { success: false, error: 'La propiedad no existe o no pertenece a este propietario' },
+          { status: 400 }
+        );
+      }
+    }
+
     const payment = await db.ownerPayment.create({
       data: {
         ownerId: validatedData.ownerId,
+        propertyId: validatedData.propertyId || null,
         amount: validatedData.amount,
         paymentDate: new Date(validatedData.paymentDate),
         paymentMethod: validatedData.paymentMethod || null,
@@ -101,6 +132,12 @@ export async function POST(request: NextRequest) {
             email: true,
           },
         },
+        property: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
       },
     });
 
@@ -114,7 +151,7 @@ export async function POST(request: NextRequest) {
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Datos inválidos', details: error.errors },
+        { success: false, error: 'Datos invalidos', details: error.errors },
         { status: 400 }
       );
     }

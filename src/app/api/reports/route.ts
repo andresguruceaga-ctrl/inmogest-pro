@@ -66,12 +66,12 @@ export async function GET(request: NextRequest) {
       where: propertyWhere,
       include: {
         owner: {
-          select: { id: true, name: true }
+          select: { id: true, name: true, email: true, phone: true }
         },
         contracts: {
           where: { status: 'VIGENTE' },
           include: {
-            tenant: { select: { id: true, name: true } }
+            tenant: { select: { id: true, name: true, email: true, phone: true } }
           }
         }
       }
@@ -99,7 +99,8 @@ export async function GET(request: NextRequest) {
             propertiesCount: 0
           },
           generated: true,
-          tickets: []
+          tickets: [],
+          ownerBalance: null
         }
       })
     }
@@ -118,28 +119,22 @@ export async function GET(request: NextRequest) {
       orderBy: { expenseDate: 'desc' }
     })
 
-    // Obtener pagos/facturas del período
-    const invoices = await prisma.invoice.findMany({
+    // Obtener pagos del período
+    const payments = await prisma.payment.findMany({
       where: {
-        status: 'PAGADA',
-        paidDate: { gte: startDate, lte: endDate },
-        contract: {
-          propertyId: { in: propertyIds }
-        }
+        status: 'PAGADO',
+        paidAt: { gte: startDate, lte: endDate },
+        propertyId: { in: propertyIds }
       },
       include: {
-        contract: {
-          include: {
-            property: { select: { id: true, title: true } },
-            tenant: { select: { id: true, name: true } }
-          }
-        }
+        property: { select: { id: true, title: true } },
+        user: { select: { id: true, name: true } }
       },
-      orderBy: { paidDate: 'desc' }
+      orderBy: { paidAt: 'desc' }
     })
 
     // Obtener tickets del período
-    const tickets = await prisma.serviceRequest.findMany({
+    const tickets = await prisma.supportTicket.findMany({
       where: {
         propertyId: { in: propertyIds },
         createdAt: { gte: startDate, lte: endDate }
@@ -150,20 +145,70 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' }
     })
 
+    // ========== OWNER BALANCE DATA ==========
+    // Get pending expenses (paid by admin, not reimbursed)
+    const pendingExpenses = await prisma.expense.findMany({
+      where: {
+        propertyId: { in: propertyIds },
+        paidByAdmin: true,
+        reimbursedByOwner: false
+      },
+      include: {
+        property: {
+          select: { id: true, title: true }
+        }
+      }
+    })
+
+    // Get owner payments
+    const ownerPayments = await prisma.ownerPayment.findMany({
+      where: effectiveOwnerId ? { ownerId: effectiveOwnerId } : {},
+      orderBy: { paymentDate: 'desc' }
+    })
+
+    // Build owner balance data
+    const ownerBalanceData = {
+      pendingExpenses: pendingExpenses.map(e => ({
+        id: e.id,
+        description: e.description || e.title,
+        amount: e.amount,
+        date: e.expenseDate.toISOString(),
+        category: e.category,
+        property: {
+          id: e.propertyId,
+          title: e.property?.title || 'N/A'
+        }
+      })),
+      ownerPayments: ownerPayments.map(p => ({
+        id: p.id,
+        amount: p.amount,
+        date: p.paymentDate.toISOString(),
+        method: p.paymentMethod,
+        reference: p.referenceNumber,
+        notes: p.notes
+      })),
+      totals: {
+        pending: pendingExpenses.reduce((sum, e) => sum + e.amount, 0),
+        payments: ownerPayments.reduce((sum, p) => sum + p.amount, 0)
+      }
+    }
+    ownerBalanceData.totals.balance = ownerBalanceData.totals.payments - ownerBalanceData.totals.pending
+
     // Procesar datos por propiedad
     const propertiesData = properties.map(property => {
       const propertyExpenses = expenses.filter(e => e.propertyId === property.id)
-      const propertyInvoices = invoices.filter(i => i.contract?.propertyId === property.id)
+      const propertyPayments = payments.filter(p => p.propertyId === property.id)
       
-      // Clasificar gastos por tipo
       const fixedExpensesList = propertyExpenses.filter(e => e.expenseType === 'FIJO')
       const variableExpensesList = propertyExpenses.filter(e => e.expenseType === 'VARIABLE')
 
       const fixedExpenses = fixedExpensesList.reduce((sum, e) => sum + e.totalAmount, 0)
       const variableExpenses = variableExpensesList.reduce((sum, e) => sum + e.totalAmount, 0)
-      const grossIncome = propertyInvoices.reduce((sum, i) => sum + i.total, 0)
-      const monthlyRent = property.contracts[0]?.monthlyRent || 0
+      const grossIncome = propertyPayments.reduce((sum, p) => sum + p.totalAmount, 0)
+      const monthlyRent = property.contracts[0]?.monthlyAmount || 0
 
+      const activeContract = property.contracts[0]
+      
       return {
         propertyId: property.id,
         propertyTitle: property.title,
@@ -175,12 +220,26 @@ export async function GET(request: NextRequest) {
         variableExpenses,
         totalExpenses: fixedExpenses + variableExpenses,
         netIncome: grossIncome - fixedExpenses - variableExpenses,
-        itbmsCollected: propertyInvoices.reduce((sum, i) => sum + (i.itbms || 0), 0),
+        itbmsCollected: propertyPayments.reduce((sum, p) => sum + (p.itbmsAmount || 0), 0),
         itbmsPaid: propertyExpenses.reduce((sum, e) => sum + (e.itbmsAmount || 0), 0),
         occupancyRate: property.contracts.length > 0 ? 100 : 0,
-        paymentsCount: propertyInvoices.length,
+        paymentsCount: propertyPayments.length,
         expensesCount: propertyExpenses.length,
         owner: property.owner,
+        tenant: activeContract?.tenant ? {
+          id: activeContract.tenant.id,
+          name: activeContract.tenant.name,
+          email: activeContract.tenant.email,
+          phone: activeContract.tenant.phone
+        } : null,
+        contract: activeContract ? {
+          id: activeContract.id,
+          startDate: activeContract.startDate.toISOString(),
+          endDate: activeContract.endDate.toISOString(),
+          monthlyAmount: activeContract.monthlyAmount,
+          deposit: activeContract.deposit,
+          status: activeContract.status
+        } : null,
         expensesDetails: {
           fixed: fixedExpensesList.map(e => ({
             id: e.id,
@@ -197,12 +256,12 @@ export async function GET(request: NextRequest) {
             category: e.category
           }))
         },
-        paymentsDetails: propertyInvoices.map(i => ({
-          id: i.id,
-          amount: i.total,
-          date: i.paidDate?.toISOString() || '',
-          type: 'Alquiler',
-          tenant: i.contract?.tenant?.name
+        paymentsDetails: propertyPayments.map(p => ({
+          id: p.id,
+          amount: p.totalAmount,
+          date: p.paidAt?.toISOString() || '',
+          type: p.paymentType,
+          tenant: p.user?.name
         }))
       }
     })
@@ -237,16 +296,16 @@ export async function GET(request: NextRequest) {
           _sum: { totalAmount: true }
         })
         
-        const monthInvoices = await prisma.invoice.aggregate({
+        const monthPayments = await prisma.payment.aggregate({
           where: {
-            status: 'PAGADA',
-            paidDate: { gte: monthStart, lte: monthEnd },
-            contract: { propertyId: { in: propertyIds } }
+            status: 'PAGADO',
+            paidAt: { gte: monthStart, lte: monthEnd },
+            propertyId: { in: propertyIds }
           },
-          _sum: { total: true }
+          _sum: { totalAmount: true }
         })
 
-        const monthGross = monthInvoices._sum.total || 0
+        const monthGross = monthPayments._sum.totalAmount || 0
         const monthExpensesTotal = monthExpenses._sum.totalAmount || 0
 
         monthlyData.push({
@@ -282,16 +341,16 @@ export async function GET(request: NextRequest) {
       _sum: { totalAmount: true }
     })
 
-    const prevInvoices = await prisma.invoice.aggregate({
+    const prevPayments = await prisma.payment.aggregate({
       where: {
-        status: 'PAGADA',
-        paidDate: { gte: previousStart, lte: previousEnd },
-        contract: { propertyId: { in: propertyIds } }
+        status: 'PAGADO',
+        paidAt: { gte: previousStart, lte: previousEnd },
+        propertyId: { in: propertyIds }
       },
-      _sum: { total: true }
+      _sum: { totalAmount: true }
     })
 
-    const prevGross = prevInvoices._sum.total || 0
+    const prevGross = prevPayments._sum.totalAmount || 0
     const prevExpensesTotal = prevExpenses._sum.totalAmount || 0
     const prevNet = prevGross - prevExpensesTotal
 
@@ -339,7 +398,8 @@ export async function GET(request: NextRequest) {
             title: t.property.title,
             address: t.property.address
           }
-        }))
+        })),
+        ownerBalance: ownerBalanceData
       }
     })
 
@@ -351,5 +411,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
- 
- 

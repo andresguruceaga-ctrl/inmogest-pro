@@ -11,9 +11,12 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CreditCard, Plus, ArrowUpRight, ArrowDownRight, Loader2, Upload, FileText, Image, Eye, Calendar, Building2, X, Check } from 'lucide-react'
+import { CreditCard, Plus, ArrowUpRight, ArrowDownRight, Loader2, Upload, FileText, Image, Eye, Calendar, Building2, X, Check, MoreHorizontal, Edit, Trash2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
 
 interface Payment {
@@ -58,6 +61,14 @@ const paymentMethods = [
   { value: 'TARJETA', label: 'Tarjeta de Crédito/Débito' },
 ]
 
+const statusOptions = [
+  { value: 'PENDIENTE', label: 'Pendiente' },
+  { value: 'PAGADO', label: 'Pagado' },
+  { value: 'ATRASADO', label: 'Atrasado' },
+  { value: 'PARCIAL', label: 'Parcial' },
+  { value: 'CANCELADO', label: 'Cancelado' },
+]
+
 export default function PagosPage() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [properties, setProperties] = useState<Property[]>([])
@@ -73,6 +84,7 @@ export default function PagosPage() {
   })
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
     paymentType: 'ALQUILER',
@@ -86,6 +98,29 @@ export default function PagosPage() {
     receiptImage: '',
     receiptFileName: '',
   })
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
+  const [editFormData, setEditFormData] = useState({
+    paymentType: 'ALQUILER',
+    amount: '',
+    referenceNumber: '',
+    paymentMethod: 'TRANSFERENCIA',
+    status: 'PAGADO',
+    dueDate: '',
+    paidAt: '',
+    propertyId: '',
+    userId: '',
+    receiptImage: '',
+    receiptFileName: '',
+  })
+
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -121,7 +156,7 @@ export default function PagosPage() {
     }
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -139,11 +174,19 @@ export default function PagosPage() {
       const data = await response.json()
 
       if (response.ok) {
-        setFormData({
-          ...formData,
-          receiptImage: data.data.fileUrl,
-          receiptFileName: data.data.fileName,
-        })
+        if (isEdit) {
+          setEditFormData({
+            ...editFormData,
+            receiptImage: data.data.fileUrl,
+            receiptFileName: data.data.fileName,
+          })
+        } else {
+          setFormData({
+            ...formData,
+            receiptImage: data.data.fileUrl,
+            receiptFileName: data.data.fileName,
+          })
+        }
         toast({
           title: 'Archivo subido',
           description: 'El comprobante se ha subido exitosamente.',
@@ -226,6 +269,166 @@ export default function PagosPage() {
     }
   }
 
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!editingPayment) {
+      toast({
+        title: 'Error',
+        description: 'No hay pago seleccionado para editar',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!editFormData.amount || !editFormData.dueDate || !editFormData.propertyId || !editFormData.userId) {
+      toast({
+        title: 'Error',
+        description: 'Por favor completa todos los campos requeridos',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const response = await fetch(`/api/payments/${editingPayment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentType: editFormData.paymentType,
+          amount: parseFloat(editFormData.amount),
+          referenceNumber: editFormData.referenceNumber || null,
+          paymentMethod: editFormData.paymentMethod,
+          status: editFormData.status,
+          paidAt: editFormData.paidAt || null,
+          dueDate: editFormData.dueDate,
+          receiptImage: editFormData.receiptImage || null,
+          propertyId: editFormData.propertyId,
+          userId: editFormData.userId,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast({
+          title: 'Pago actualizado',
+          description: 'El pago se ha actualizado exitosamente.',
+        })
+        setEditOpen(false)
+        setEditingPayment(null)
+        fetchData()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'No se pudo actualizar el pago',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Error de conexión',
+        variant: 'destructive',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deletingId) return
+    
+    setDeleting(true)
+
+    try {
+      const response = await fetch(`/api/payments/${deletingId}`, {
+        method: 'DELETE',
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast({
+          title: 'Pago eliminado',
+          description: 'El pago se ha eliminado exitosamente.',
+        })
+        setDeleteOpen(false)
+        setDeletingId(null)
+        fetchData()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'No se pudo eliminar el pago',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Error de conexión',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const openDetail = (payment: Payment) => {
+    setSelectedPayment(payment)
+    setDetailOpen(true)
+  }
+
+  const openEdit = (payment: Payment) => {
+    setEditingPayment(payment)
+    
+    let paidAtStr = ''
+    try {
+      if (payment.paidAt) {
+        const date = new Date(payment.paidAt)
+        if (!isNaN(date.getTime())) {
+          paidAtStr = date.toISOString().split('T')[0]
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing paidAt:', e)
+    }
+
+    let dueDateStr = ''
+    try {
+      if (payment.dueDate) {
+        const date = new Date(payment.dueDate)
+        if (!isNaN(date.getTime())) {
+          dueDateStr = date.toISOString().split('T')[0]
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing dueDate:', e)
+    }
+
+    setEditFormData({
+      paymentType: payment.paymentType || 'ALQUILER',
+      amount: String(payment.amount ?? 0),
+      referenceNumber: payment.referenceNumber || '',
+      paymentMethod: payment.paymentMethod || 'TRANSFERENCIA',
+      status: payment.status || 'PAGADO',
+      dueDate: dueDateStr,
+      paidAt: paidAtStr,
+      propertyId: payment.property?.id || '',
+      userId: payment.user?.id || '',
+      receiptImage: payment.receiptImage || '',
+      receiptFileName: '',
+    })
+    setEditOpen(true)
+  }
+
+  const openDelete = (id: string) => {
+    setDeletingId(id)
+    setDeleteOpen(true)
+  }
+
   const resetForm = () => {
     setFormData({
       paymentType: 'ALQUILER',
@@ -271,10 +474,8 @@ export default function PagosPage() {
     return found?.label || method
   }
 
-  // Calcular fecha de pago por defecto (hoy)
   const today = new Date().toISOString().split('T')[0]
   
-  // Calcular fecha de vencimiento (día 5 del próximo mes)
   const nextMonth = new Date()
   nextMonth.setMonth(nextMonth.getMonth() + 1)
   nextMonth.setDate(5)
@@ -364,7 +565,7 @@ export default function PagosPage() {
                         <TableHead className="hidden lg:table-cell">Referencia</TableHead>
                         <TableHead>Monto</TableHead>
                         <TableHead>Estado</TableHead>
-                        <TableHead className="text-right">Comprobante</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -395,16 +596,30 @@ export default function PagosPage() {
                             {getStatusBadge(payment.status)}
                           </TableCell>
                           <TableCell className="text-right">
-                            {payment.receiptImage ? (
-                              <Button variant="ghost" size="sm" asChild>
-                                <a href={payment.receiptImage} target="_blank" rel="noopener noreferrer">
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  Ver
-                                </a>
-                              </Button>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">Sin comprobante</span>
-                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openDetail(payment)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Ver detalle
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openEdit(payment)}>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={() => openDelete(payment.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -419,7 +634,7 @@ export default function PagosPage() {
         <Footer />
       </SidebarInset>
 
-      {/* Dialog para Registrar Pago */}
+      {/* Dialog Registrar Pago */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -532,7 +747,6 @@ export default function PagosPage() {
               </div>
             </div>
 
-            {/* Sección de comprobante */}
             <div className="space-y-2">
               <Label>Comprobante de Pago (PDF o Imagen)</Label>
               <div className="border-2 border-dashed rounded-lg p-4">
@@ -564,7 +778,7 @@ export default function PagosPage() {
                       ref={fileInputRef}
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
-                      onChange={handleFileChange}
+                      onChange={(e) => handleFileChange(e, false)}
                       className="hidden"
                     />
                     <Button 
@@ -588,7 +802,6 @@ export default function PagosPage() {
               </div>
             </div>
 
-            {/* Resumen de pago */}
             {formData.amount && (
               <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
                 <h4 className="font-medium mb-2">Resumen del Pago</h4>
@@ -611,6 +824,306 @@ export default function PagosPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog Editar Pago */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Pago</DialogTitle>
+            <DialogDescription>
+              Modifica los datos del pago.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-propertyId">Propiedad *</Label>
+                <Select value={editFormData.propertyId} onValueChange={(v) => setEditFormData({...editFormData, propertyId: v})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar propiedad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {properties.map((prop) => (
+                      <SelectItem key={prop.id} value={prop.id}>{prop.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-userId">Inquilino *</Label>
+                <Select value={editFormData.userId} onValueChange={(v) => setEditFormData({...editFormData, userId: v})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar inquilino" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenants.map((tenant) => (
+                      <SelectItem key={tenant.id} value={tenant.id}>{tenant.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-paymentType">Tipo de Pago *</Label>
+                <Select value={editFormData.paymentType} onValueChange={(v) => setEditFormData({...editFormData, paymentType: v})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentTypes.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-paymentMethod">Método de Pago</Label>
+                <Select value={editFormData.paymentMethod || 'TRANSFERENCIA'} onValueChange={(v) => setEditFormData({...editFormData, paymentMethod: v})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar método" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentMethods.map((method) => (
+                      <SelectItem key={method.value} value={method.value}>{method.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-amount">Monto (USD) *</Label>
+                <Input
+                  id="edit-amount"
+                  type="number"
+                  step="0.01"
+                  value={editFormData.amount}
+                  onChange={(e) => setEditFormData({...editFormData, amount: e.target.value})}
+                  placeholder="2500.00"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-status">Estado *</Label>
+                <Select value={editFormData.status} onValueChange={(v) => setEditFormData({...editFormData, status: v})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusOptions.map((status) => (
+                      <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-referenceNumber">Número de Referencia</Label>
+                <Input
+                  id="edit-referenceNumber"
+                  value={editFormData.referenceNumber}
+                  onChange={(e) => setEditFormData({...editFormData, referenceNumber: e.target.value})}
+                  placeholder="Ej: TRF-2025-001234"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-paidAt">Fecha de Pago</Label>
+                <Input
+                  id="edit-paidAt"
+                  type="date"
+                  value={editFormData.paidAt}
+                  onChange={(e) => setEditFormData({...editFormData, paidAt: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-dueDate">Fecha de Vencimiento *</Label>
+                <Input
+                  id="edit-dueDate"
+                  type="date"
+                  value={editFormData.dueDate}
+                  onChange={(e) => setEditFormData({...editFormData, dueDate: e.target.value})}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Comprobante de Pago (PDF o Imagen)</Label>
+              <div className="border-2 border-dashed rounded-lg p-4">
+                {editFormData.receiptImage ? (
+                  <div className="flex items-center justify-between bg-muted/50 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      {editFormData.receiptImage.endsWith('.pdf') ? (
+                        <FileText className="h-8 w-8 text-red-500" />
+                      ) : (
+                        <Image className="h-8 w-8 text-primary" />
+                      )}
+                      <div>
+                        <p className="font-medium text-sm">{editFormData.receiptFileName || 'Comprobante'}</p>
+                        <p className="text-xs text-muted-foreground">Archivo subido</p>
+                      </div>
+                    </div>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setEditFormData({...editFormData, receiptImage: '', receiptFileName: ''})}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <input
+                      ref={editFileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => handleFileChange(e, true)}
+                      className="hidden"
+                    />
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => editFileInputRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4 mr-2" />
+                      )}
+                      {uploading ? 'Subiendo...' : 'Subir Comprobante'}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      PDF, JPG, PNG o WEBP. Máximo 10MB.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {editFormData.amount && (
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+                <h4 className="font-medium mb-2">Resumen del Pago</h4>
+                <div className="flex justify-between font-bold text-lg">
+                  <span>Total:</span>
+                  <span className="text-primary">${parseFloat(editFormData.amount).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saving || uploading}>
+                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Guardar Cambios
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Ver Detalle */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detalle del Pago</DialogTitle>
+          </DialogHeader>
+          {selectedPayment && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha de Pago</p>
+                  <p className="font-medium">{selectedPayment.paidAt ? formatDate(selectedPayment.paidAt) : 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha de Vencimiento</p>
+                  <p className="font-medium">{formatDate(selectedPayment.dueDate)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Propiedad</p>
+                  <p className="font-medium">{selectedPayment.property?.title || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Inquilino</p>
+                  <p className="font-medium">{selectedPayment.user?.name || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Tipo de Pago</p>
+                  <p className="font-medium">{getPaymentTypeLabel(selectedPayment.paymentType)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Método de Pago</p>
+                  <p className="font-medium">{getPaymentMethodLabel(selectedPayment.paymentMethod)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Referencia</p>
+                  <p className="font-medium">{selectedPayment.referenceNumber || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Estado</p>
+                  {getStatusBadge(selectedPayment.status)}
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div className="flex justify-between">
+                <span className="font-medium text-lg">Monto:</span>
+                <span className="font-bold text-lg text-primary">${selectedPayment.totalAmount.toLocaleString()}</span>
+              </div>
+
+              {selectedPayment.receiptImage && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Comprobante</p>
+                    <Button variant="outline" asChild>
+                      <a href={selectedPayment.receiptImage} target="_blank" rel="noopener noreferrer">
+                        <Eye className="h-4 w-4 mr-2" />
+                        Ver Comprobante
+                      </a>
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailOpen(false)}>
+              Cerrar
+            </Button>
+            <Button onClick={() => {
+              setDetailOpen(false)
+              if (selectedPayment) openEdit(selectedPayment)
+            }}>
+              <Edit className="h-4 w-4 mr-2" />
+              Editar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AlertDialog Eliminar */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar pago?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. El pago será eliminado permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   )
 }

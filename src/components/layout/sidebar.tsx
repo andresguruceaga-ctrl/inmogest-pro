@@ -89,6 +89,7 @@ const adminNavItems: NavItem[] = [
 const propietarioNavItems: NavItem[] = [
   { title: 'Dashboard', href: '/', icon: 'LayoutDashboard' },
   { title: 'Mis Propiedades', href: '/mis-propiedades', icon: 'Building2' },
+  { title: 'Mis Contratos', href: '/mis-contratos', icon: 'FileText' },
   { title: 'Relación de Gastos', href: '/relacion-gastos', icon: 'Wallet' },
   { title: 'Soporte', href: '/soporte', icon: 'HelpCircle' },
   { title: 'Perfil', href: '/perfil', icon: 'User' },

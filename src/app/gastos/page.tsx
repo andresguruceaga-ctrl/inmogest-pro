@@ -26,13 +26,11 @@ interface Expense {
   category: string
   expenseType: string
   amount: number
-  totalAmount: number
   invoiceNumber: string | null
   supplier: string | null
   expenseDate: string
   paidByAdmin: boolean
   reimbursedByOwner: boolean
-  reimbursedAt: string | null
   property: { id: string; title: string; address: string } | null
 }
 
@@ -58,11 +56,11 @@ const EXPENSE_TYPES = ['FIJO', 'VARIABLE'] as const
 const CATEGORY_LABELS: Record<string, string> = {
   MANTENIMIENTO_PH: 'Mantenimiento PH',
   SEGURO: 'Seguro',
-  SERVICIOS_BASICOS: 'Servicios Básicos',
-  REPARACION: 'Reparación',
-  SERVICIO_TECNICO: 'Servicio Técnico',
+  SERVICIOS_BASICOS: 'Servicios Basicos',
+  REPARACION: 'Reparacion',
+  SERVICIO_TECNICO: 'Servicio Tecnico',
   IMPUESTOS: 'Impuestos',
-  COMISION_ADMIN: 'Comisión Admin',
+  COMISION_ADMIN: 'Comision Admin',
   OTROS: 'Otros',
 }
 
@@ -96,7 +94,6 @@ export default function GastosPage() {
     expenseDate: '',
     propertyId: '',
     paidByAdmin: false,
-    reimbursedByOwner: false,
   })
 
   // Delete confirmation state
@@ -115,7 +112,6 @@ export default function GastosPage() {
     expenseDate: '',
     propertyId: '',
     paidByAdmin: false,
-    reimbursedByOwner: false,
   })
 
   // Memoized valid property ID for edit form
@@ -183,7 +179,6 @@ export default function GastosPage() {
           expenseDate: formData.expenseDate,
           propertyId: formData.propertyId,
           paidByAdmin: formData.paidByAdmin,
-          reimbursedByOwner: formData.reimbursedByOwner,
         }),
       })
 
@@ -192,7 +187,9 @@ export default function GastosPage() {
       if (response.ok) {
         toast({
           title: 'Gasto registrado',
-          description: 'El gasto se ha registrado exitosamente.',
+          description: formData.paidByAdmin 
+            ? 'El gasto se ha registrado como pagado por el administrador. Aparecera en Relacion de Gastos.'
+            : 'El gasto se ha registrado exitosamente.',
         })
         setDialogOpen(false)
         resetForm()
@@ -207,7 +204,7 @@ export default function GastosPage() {
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Error de conexión',
+        description: 'Error de conexion',
         variant: 'destructive',
       })
     } finally {
@@ -227,11 +224,10 @@ export default function GastosPage() {
       return
     }
 
-    // Validar campos requeridos
     if (!editFormData.title?.trim()) {
       toast({
         title: 'Error',
-        description: 'El título es requerido',
+        description: 'El titulo es requerido',
         variant: 'destructive',
       })
       return
@@ -240,7 +236,7 @@ export default function GastosPage() {
     if (!editFormData.amount || isNaN(parseFloat(editFormData.amount))) {
       toast({
         title: 'Error',
-        description: 'El monto debe ser un número válido',
+        description: 'El monto debe ser un numero valido',
         variant: 'destructive',
       })
       return
@@ -283,7 +279,6 @@ export default function GastosPage() {
           expenseDate: editFormData.expenseDate,
           propertyId: editFormData.propertyId,
           paidByAdmin: editFormData.paidByAdmin,
-          reimbursedByOwner: editFormData.reimbursedByOwner,
         }),
       })
 
@@ -291,7 +286,7 @@ export default function GastosPage() {
       try {
         data = await response.json()
       } catch {
-        throw new Error('El servidor no respondió correctamente. Por favor, intenta de nuevo.')
+        throw new Error('El servidor no respondio correctamente. Por favor, intenta de nuevo.')
       }
 
       if (response.ok) {
@@ -314,7 +309,7 @@ export default function GastosPage() {
       console.error('Error updating expense:', error)
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Error de conexión. Por favor, intenta de nuevo.',
+        description: error instanceof Error ? error.message : 'Error de conexion. Por favor, intenta de nuevo.',
         variant: 'destructive',
       })
     } finally {
@@ -352,7 +347,7 @@ export default function GastosPage() {
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Error de conexión',
+        description: 'Error de conexion',
         variant: 'destructive',
       })
     } finally {
@@ -377,10 +372,8 @@ export default function GastosPage() {
     
     setEditingExpense(expense)
     
-    // Get property ID - must be valid
     const propertyId = expense.property?.id || ''
     
-    // Parse date safely
     let expenseDateStr = ''
     try {
       if (expense.expenseDate) {
@@ -393,12 +386,10 @@ export default function GastosPage() {
       console.error('Error parsing expense date:', e)
     }
 
-    // Validate category
     const category = EXPENSE_CATEGORIES.includes(expense.category as typeof EXPENSE_CATEGORIES[number])
       ? expense.category as typeof EXPENSE_CATEGORIES[number]
       : 'OTROS'
 
-    // Validate expenseType
     const expenseType = EXPENSE_TYPES.includes(expense.expenseType as typeof EXPENSE_TYPES[number])
       ? expense.expenseType as typeof EXPENSE_TYPES[number]
       : 'VARIABLE'
@@ -414,7 +405,6 @@ export default function GastosPage() {
       expenseDate: expenseDateStr,
       propertyId: propertyId,
       paidByAdmin: expense.paidByAdmin || false,
-      reimbursedByOwner: expense.reimbursedByOwner || false,
     })
     setEditOpen(true)
   }
@@ -436,7 +426,6 @@ export default function GastosPage() {
       expenseDate: '',
       propertyId: '',
       paidByAdmin: false,
-      reimbursedByOwner: false,
     })
   }
 
@@ -456,7 +445,6 @@ export default function GastosPage() {
   const summaryCards = [
     { label: 'Gastos Fijos', value: summary.byType.FIJO.total, trend: 'up' },
     { label: 'Gastos Variables', value: summary.byType.VARIABLE.total, trend: 'down' },
-    { label: 'Cantidad de Gastos', value: expenses.length, trend: 'neutral', isCount: true },
     { label: 'Total', value: summary.totalExpenses, trend: 'up' },
   ]
 
@@ -479,15 +467,13 @@ export default function GastosPage() {
               </Button>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-3">
               {summaryCards.map((item, i) => (
                 <Card key={i}>
                   <CardContent className="pt-6">
                     <p className="text-sm text-muted-foreground">{item.label}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-2xl font-bold">
-                        {item.isCount ? item.value : `$${item.value.toLocaleString()}`}
-                      </span>
+                      <span className="text-2xl font-bold">${item.value.toLocaleString()}</span>
                       {item.trend === 'up' && <ArrowUpRight className="h-4 w-4 text-red-500" />}
                       {item.trend === 'down' && <ArrowDownRight className="h-4 w-4 text-emerald-500" />}
                     </div>
@@ -533,8 +519,9 @@ export default function GastosPage() {
                       <TableRow>
                         <TableHead>Fecha</TableHead>
                         <TableHead>Propiedad</TableHead>
-                        <TableHead className="hidden md:table-cell">Categoría</TableHead>
+                        <TableHead className="hidden md:table-cell">Categoria</TableHead>
                         <TableHead>Tipo</TableHead>
+                        <TableHead>Estado</TableHead>
                         <TableHead>Monto</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
@@ -556,25 +543,23 @@ export default function GastosPage() {
                           </TableCell>
                           <TableCell className="hidden md:table-cell">{getCategoryLabel(expense.category)}</TableCell>
                           <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              <Badge variant={expense.expenseType === 'FIJO' ? 'outline' : 'secondary'}>
-                                {expense.expenseType === 'FIJO' ? 'Fijo' : 'Variable'}
+                            <Badge variant={expense.expenseType === 'FIJO' ? 'outline' : 'secondary'}>
+                              {expense.expenseType === 'FIJO' ? 'Fijo' : 'Variable'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {expense.paidByAdmin ? (
+                              <Badge variant="default" className="bg-orange-500">
+                                Pagado por Admin
                               </Badge>
-                              {expense.paidByAdmin && (
-                                expense.reimbursedByOwner ? (
-                                  <Badge variant="outline" className="bg-emerald-100 text-emerald-800 text-xs">
-                                    Reembolsado
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="bg-amber-100 text-amber-800 text-xs">
-                                    Pendiente
-                                  </Badge>
-                                )
-                              )}
-                            </div>
+                            ) : (
+                              <Badge variant="outline" className="text-green-600">
+                                Gasto Propiedad
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="font-medium text-red-500">
-                            -${expense.totalAmount.toLocaleString()}
+                            -${expense.amount.toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>
@@ -627,7 +612,7 @@ export default function GastosPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="title">Título *</Label>
+                <Label htmlFor="title">Titulo *</Label>
                 <Input
                   id="title"
                   value={formData.title}
@@ -650,10 +635,10 @@ export default function GastosPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="category">Categoría *</Label>
+                <Label htmlFor="category">Categoria *</Label>
                 <Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as typeof EXPENSE_CATEGORIES[number]})}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar categoría" />
+                    <SelectValue placeholder="Seleccionar categoria" />
                   </SelectTrigger>
                   <SelectContent>
                     {EXPENSE_CATEGORIES.map((cat) => (
@@ -697,7 +682,7 @@ export default function GastosPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="invoiceNumber">Número de Factura</Label>
+                <Label htmlFor="invoiceNumber">Numero de Factura</Label>
                 <Input
                   id="invoiceNumber"
                   value={formData.invoiceNumber}
@@ -716,7 +701,7 @@ export default function GastosPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="description">Descripción</Label>
+              <Label htmlFor="description">Descripcion</Label>
               <textarea
                 id="description"
                 className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -726,47 +711,28 @@ export default function GastosPage() {
               />
             </div>
             
-            <Separator className="my-4" />
-            
-            {/* Sección de Gastos Administrados */}
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 space-y-3">
-              <h4 className="font-medium text-amber-800 dark:text-amber-200">Gestión Administrativa</h4>
-              <div className="flex items-center gap-2">
+            {/* CHECKBOX: Gasto pagado por administrador */}
+            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
                   id="paidByAdmin"
                   checked={formData.paidByAdmin}
-                  onChange={(e) => setFormData({...formData, paidByAdmin: e.target.checked, reimbursedByOwner: e.target.checked ? formData.reimbursedByOwner : false})}
-                  className="rounded border-gray-300"
+                  onChange={(e) => setFormData({...formData, paidByAdmin: e.target.checked})}
+                  className="rounded border-gray-300 mt-1"
                 />
-                <Label htmlFor="paidByAdmin" className="font-normal">Pagado por Administración (adelanto)</Label>
+                <div>
+                  <Label htmlFor="paidByAdmin" className="font-medium cursor-pointer">
+                    Gasto pagado por el Administrador
+                  </Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Marca esta opcion si el gasto fue pagado por la administracion y el propietario debe reembolsarlo. 
+                    Aparecera en la seccion de "Relacion de Gastos".
+                  </p>
+                </div>
               </div>
-              
-              {formData.paidByAdmin && (
-                <div className="flex items-center gap-2 pl-6">
-                  <input
-                    type="checkbox"
-                    id="reimbursedByOwner"
-                    checked={formData.reimbursedByOwner}
-                    onChange={(e) => setFormData({...formData, reimbursedByOwner: e.target.checked})}
-                    className="rounded border-gray-300"
-                  />
-                  <Label htmlFor="reimbursedByOwner" className="font-normal">Reembolsado por Propietario</Label>
-                </div>
-              )}
-              
-              {formData.paidByAdmin && !formData.reimbursedByOwner && formData.amount && (
-                <div className="text-sm text-amber-700 dark:text-amber-300 mt-2">
-                  <strong>Balance pendiente:</strong> ${parseFloat(formData.amount || '0').toFixed(2)}
-                </div>
-              )}
             </div>
             
-            {formData.amount && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm">
-                <strong>Total del gasto:</strong> ${parseFloat(formData.amount || '0').toFixed(2)}
-              </div>
-            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancelar
@@ -790,7 +756,7 @@ export default function GastosPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">Título</p>
+                  <p className="text-sm text-muted-foreground">Titulo</p>
                   <p className="font-medium">{selectedExpense.title}</p>
                 </div>
                 <div>
@@ -802,7 +768,7 @@ export default function GastosPage() {
                   <p className="font-medium">{selectedExpense.property?.title || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Categoría</p>
+                  <p className="text-sm text-muted-foreground">Categoria</p>
                   <p className="font-medium">{getCategoryLabel(selectedExpense.category)}</p>
                 </div>
                 <div>
@@ -815,20 +781,25 @@ export default function GastosPage() {
                   <p className="text-sm text-muted-foreground">Proveedor</p>
                   <p className="font-medium">{selectedExpense.supplier || 'N/A'}</p>
                 </div>
-              </div>
-              
-              <Separator />
-              
-              <div className="flex justify-between">
-                <span className="font-medium text-lg">Total:</span>
-                <span className="font-bold text-lg text-red-500">${selectedExpense.totalAmount.toLocaleString()}</span>
+                <div>
+                  <p className="text-sm text-muted-foreground">Estado</p>
+                  {selectedExpense.paidByAdmin ? (
+                    <Badge variant="default" className="bg-orange-500">Pagado por Admin</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-green-600">Gasto Propiedad</Badge>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Monto</p>
+                  <p className="font-bold text-lg text-red-500">${selectedExpense.amount.toLocaleString()}</p>
+                </div>
               </div>
 
               {selectedExpense.description && (
                 <>
                   <Separator />
                   <div>
-                    <p className="text-sm text-muted-foreground mb-1">Descripción</p>
+                    <p className="text-sm text-muted-foreground mb-1">Descripcion</p>
                     <p className="text-sm bg-muted/50 rounded-lg p-3">{selectedExpense.description}</p>
                   </div>
                 </>
@@ -836,40 +807,9 @@ export default function GastosPage() {
 
               {selectedExpense.invoiceNumber && (
                 <div>
-                  <p className="text-sm text-muted-foreground">Número de Factura</p>
+                  <p className="text-sm text-muted-foreground">Numero de Factura</p>
                   <p className="font-medium">{selectedExpense.invoiceNumber}</p>
                 </div>
-              )}
-              
-              {/* Sección de Gestión Administrativa */}
-              {selectedExpense.paidByAdmin && (
-                <>
-                  <Separator />
-                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 space-y-2">
-                    <h4 className="font-medium text-amber-800 dark:text-amber-200">Gestión Administrativa</h4>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                        Pagado por Administración
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {selectedExpense.reimbursedByOwner ? (
-                        <Badge variant="outline" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
-                          Reembolsado por Propietario
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                          Pendiente de Reembolso
-                        </Badge>
-                      )}
-                    </div>
-                    {selectedExpense.reimbursedAt && (
-                      <p className="text-sm text-muted-foreground">
-                        Fecha de reembolso: {formatDate(selectedExpense.reimbursedAt)}
-                      </p>
-                    )}
-                  </div>
-                </>
               )}
             </div>
           )}
@@ -900,7 +840,7 @@ export default function GastosPage() {
           <form onSubmit={handleEdit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="edit-title">Título *</Label>
+                <Label htmlFor="edit-title">Titulo *</Label>
                 <Input
                   id="edit-title"
                   value={editFormData.title}
@@ -926,10 +866,10 @@ export default function GastosPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-category">Categoría *</Label>
+                <Label htmlFor="edit-category">Categoria *</Label>
                 <Select value={editFormData.category} onValueChange={(v) => setEditFormData({...editFormData, category: v as typeof EXPENSE_CATEGORIES[number]})}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar categoría" />
+                    <SelectValue placeholder="Seleccionar categoria" />
                   </SelectTrigger>
                   <SelectContent>
                     {EXPENSE_CATEGORIES.map((cat) => (
@@ -973,7 +913,7 @@ export default function GastosPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-invoiceNumber">Número de Factura</Label>
+                <Label htmlFor="edit-invoiceNumber">Numero de Factura</Label>
                 <Input
                   id="edit-invoiceNumber"
                   value={editFormData.invoiceNumber}
@@ -992,7 +932,7 @@ export default function GastosPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-description">Descripción</Label>
+              <Label htmlFor="edit-description">Descripcion</Label>
               <textarea
                 id="edit-description"
                 className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -1002,47 +942,27 @@ export default function GastosPage() {
               />
             </div>
             
-            <Separator className="my-4" />
-            
-            {/* Sección de Gastos Administrados */}
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 space-y-3">
-              <h4 className="font-medium text-amber-800 dark:text-amber-200">Gestión Administrativa</h4>
-              <div className="flex items-center gap-2">
+            {/* CHECKBOX: Gasto pagado por administrador */}
+            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
                   id="edit-paidByAdmin"
                   checked={editFormData.paidByAdmin}
-                  onChange={(e) => setEditFormData({...editFormData, paidByAdmin: e.target.checked, reimbursedByOwner: e.target.checked ? editFormData.reimbursedByOwner : false})}
-                  className="rounded border-gray-300"
+                  onChange={(e) => setEditFormData({...editFormData, paidByAdmin: e.target.checked})}
+                  className="rounded border-gray-300 mt-1"
                 />
-                <Label htmlFor="edit-paidByAdmin" className="font-normal">Pagado por Administración (adelanto)</Label>
+                <div>
+                  <Label htmlFor="edit-paidByAdmin" className="font-medium cursor-pointer">
+                    Gasto pagado por el Administrador
+                  </Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Si esta marcado, el gasto aparecera en "Relacion de Gastos" como pendiente de reembolso.
+                  </p>
+                </div>
               </div>
-              
-              {editFormData.paidByAdmin && (
-                <div className="flex items-center gap-2 pl-6">
-                  <input
-                    type="checkbox"
-                    id="edit-reimbursedByOwner"
-                    checked={editFormData.reimbursedByOwner}
-                    onChange={(e) => setEditFormData({...editFormData, reimbursedByOwner: e.target.checked})}
-                    className="rounded border-gray-300"
-                  />
-                  <Label htmlFor="edit-reimbursedByOwner" className="font-normal">Reembolsado por Propietario</Label>
-                </div>
-              )}
-              
-              {editFormData.paidByAdmin && !editFormData.reimbursedByOwner && editFormData.amount && (
-                <div className="text-sm text-amber-700 dark:text-amber-300 mt-2">
-                  <strong>Balance pendiente:</strong> ${parseFloat(editFormData.amount || '0').toFixed(2)}
-                </div>
-              )}
             </div>
             
-            {editFormData.amount && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm">
-                <strong>Total del gasto:</strong> ${parseFloat(editFormData.amount || '0').toFixed(2)}
-              </div>
-            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
                 Cancelar
@@ -1060,9 +980,9 @@ export default function GastosPage() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar gasto?</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar gasto?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. El gasto será eliminado permanentemente.
+              Esta accion no se puede deshacer. El gasto sera eliminado permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
