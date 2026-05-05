@@ -8,7 +8,8 @@ const createTicketSchema = z.object({
   description: z.string().min(1, 'La descripción es requerida'),
   category: z.string().optional().nullable(),
   priority: z.string().default('MEDIA'),
-  photos: z.string().optional().nullable(),
+    photos: z.string().optional().nullable(),
+    attachments: z.string().optional().nullable(),
   propertyId: z.string().min(1, 'La propiedad es requerida'),
   userId: z.string().min(1, 'El usuario es requerido'),
 });
@@ -156,6 +157,7 @@ export async function POST(request: NextRequest) {
         priority: validatedData.priority as any,
         status: 'ABIERTO',
         photos: validatedData.photos ?? null,
+          attachments: validatedData.attachments ?? null,
         propertyId: validatedData.propertyId,
         userId: validatedData.userId,
       },

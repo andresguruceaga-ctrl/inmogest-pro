@@ -153,6 +153,7 @@ model SupportTicket {
   status      TicketStatus   @default(ABIERTO)
   priority    TicketPriority @default(MEDIA)
   photos      String?
+  attachments String?        // JSON string con array de archivos adjuntos
   response    String?
   respondedAt DateTime?
   respondedBy String?
