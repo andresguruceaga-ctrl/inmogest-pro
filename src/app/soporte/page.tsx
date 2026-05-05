@@ -12,9 +12,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { 
+import {
   HelpCircle, Plus, Search, Filter, MoreHorizontal, Eye, AlertTriangle, Clock, CheckCircle,
-  Loader2, Trash2, Edit, MessageSquare, X
+  Loader2, Trash2, Edit, MessageSquare, X, Paperclip, FileText, Image, Download, Upload
 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -29,6 +29,7 @@ interface Ticket {
   status: string
   priority: string
   photos: string | null
+  attachments: string | null
   response: string | null
   createdAt: string
   property: {
@@ -56,6 +57,12 @@ interface User {
   role: 'admin' | 'inquilino' | 'propietario'
 }
 
+interface Attachment {
+  name: string
+  type: string
+  url: string
+}
+
 const statusOptions = [
   { value: 'ABIERTO', label: 'Abierto', color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
   { value: 'EN_PROCESO', label: 'En Proceso', color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' },
@@ -71,35 +78,37 @@ const priorityOptions = [
 ]
 
 const categoryOptions = [
-  { value: 'REPARACION', label: 'Reparación' },
+  { value: 'REPARACION', label: 'Reparacion' },
   { value: 'MANTENIMIENTO', label: 'Mantenimiento' },
   { value: 'PRESUPUESTO', label: 'Solicitud de Presupuesto' },
-  { value: 'MEJORA', label: 'Mejora/Remodelación' },
-  { value: 'SERVICIO', label: 'Servicio Técnico' },
-  { value: 'INSPECCION', label: 'Inspección' },
+  { value: 'MEJORA', label: 'Mejora/Remodelacion' },
+  { value: 'SERVICIO', label: 'Servicio Tecnico' },
+  { value: 'INSPECCION', label: 'Inspeccion' },
   { value: 'OTRO', label: 'Otro' },
 ]
 
 export default function SoportePage() {
   const { toast } = useToast()
-  
+
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingFiles, setUploadingFiles] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<Array<{file: File, preview: string}>>([])
   const [currentUser, setCurrentUser] = useState<User | null>(null)
-  
+
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  
+
   // Dialogs
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
-  
+
   // Form state
   const [formData, setFormData] = useState({
     title: '',
@@ -112,7 +121,6 @@ export default function SoportePage() {
   })
 
   useEffect(() => {
-    // Get current user from localStorage
     const userStr = localStorage.getItem('inmogest-pro-storage')
     if (userStr) {
       try {
@@ -136,24 +144,18 @@ export default function SoportePage() {
   const fetchTickets = async () => {
     try {
       let url = '/api/tickets'
-      
-      // Filter by user role
+
       if (currentUser?.role === 'inquilino') {
-        // Inquilino only sees their own tickets
         url += `?userId=${currentUser.id}`
       } else if (currentUser?.role === 'propietario') {
-        // Propietario sees tickets from their properties
-        // First get their properties, then filter
         const propsResponse = await fetch('/api/properties')
         if (propsResponse.ok) {
           const propsData = await propsResponse.json()
           const userProperties = (propsData.properties || []).filter(
             (p: { ownerId: string }) => p.ownerId === currentUser.id
           )
-          // If they have properties, we'll filter in the frontend
           const propertyIds = userProperties.map((p: { id: string }) => p.id)
           if (propertyIds.length > 0) {
-            // Fetch all tickets and filter by property
             const response = await fetch(url)
             if (response.ok) {
               const data = await response.json()
@@ -170,8 +172,7 @@ export default function SoportePage() {
         setLoading(false)
         return
       }
-      
-      // Admin sees all tickets
+
       const response = await fetch(url)
       if (response.ok) {
         const data = await response.json()
@@ -190,11 +191,8 @@ export default function SoportePage() {
       if (response.ok) {
         const data = await response.json()
         let userProperties = data.properties || []
-        
-        // Filter properties based on user role
+
         if (currentUser?.role === 'inquilino') {
-          // Inquilino sees only the property they're renting
-          // Get their contract to find their property
           const contractsResponse = await fetch('/api/contracts')
           if (contractsResponse.ok) {
             const contractsData = await contractsResponse.json()
@@ -210,13 +208,11 @@ export default function SoportePage() {
             }
           }
         } else if (currentUser?.role === 'propietario') {
-          // Propietario sees only their properties
           userProperties = userProperties.filter(
             (p: { ownerId: string }) => p.ownerId === currentUser.id
           )
         }
-        // Admin sees all properties
-        
+
         setProperties(userProperties)
       }
     } catch (error) {
@@ -224,9 +220,105 @@ export default function SoportePage() {
     }
   }
 
+  // File handling functions
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+
+    const newFiles: Array<{file: File, preview: string}> = []
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          title: 'Archivo no valido',
+          description: `${file.name} no es un tipo de archivo permitido (PDF, JPG, PNG, WEBP)`,
+          variant: 'destructive',
+        })
+        continue
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        toast({
+          title: 'Archivo muy grande',
+          description: `${file.name} excede el tamano maximo de 10MB`,
+          variant: 'destructive',
+        })
+        continue
+      }
+
+      const preview = file.type.startsWith('image/') 
+        ? URL.createObjectURL(file) 
+        : 'pdf'
+      
+      newFiles.push({ file, preview })
+    }
+
+    setPendingFiles([...pendingFiles, ...newFiles])
+    e.target.value = ''
+  }
+
+  const removePendingFile = (index: number) => {
+    const newFiles = [...pendingFiles]
+    if (newFiles[index].preview.startsWith('blob:')) {
+      URL.revokeObjectURL(newFiles[index].preview)
+    }
+    newFiles.splice(index, 1)
+    setPendingFiles(newFiles)
+  }
+
+  const uploadFiles = async (): Promise<string | null> => {
+    if (pendingFiles.length === 0) return null
+
+    setUploadingFiles(true)
+    const uploadedFiles: Array<{name: string, type: string, url: string}> = []
+
+    try {
+      for (const { file } of pendingFiles) {
+        const formDataUpload = new FormData()
+        formDataUpload.append('file', file)
+        formDataUpload.append('folder', 'tickets')
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formDataUpload,
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            uploadedFiles.push({
+              name: file.name,
+              type: file.type,
+              url: data.data.fileUrl,
+            })
+          }
+        }
+      }
+
+      return JSON.stringify(uploadedFiles)
+    } catch (error) {
+      console.error('Error uploading files:', error)
+      return null
+    } finally {
+      setUploadingFiles(false)
+    }
+  }
+
+  const parseAttachments = (attachmentsStr: string | null): Attachment[] => {
+    if (!attachmentsStr) return []
+    try {
+      return JSON.parse(attachmentsStr)
+    } catch {
+      return []
+    }
+  }
+
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!formData.title || !formData.description || !formData.propertyId) {
       toast({
         title: 'Error',
@@ -239,11 +331,14 @@ export default function SoportePage() {
     if (!currentUser?.id) {
       toast({
         title: 'Error',
-        description: 'Debes iniciar sesión para crear un ticket',
+        description: 'Debes iniciar sesion para crear un ticket',
         variant: 'destructive',
       })
       return
     }
+
+    // Upload files first
+    const uploadedAttachments = await uploadFiles()
 
     setSaving(true)
     try {
@@ -257,6 +352,7 @@ export default function SoportePage() {
           priority: formData.priority,
           propertyId: formData.propertyId,
           userId: currentUser.id,
+          attachments: uploadedAttachments,
         }),
       })
 
@@ -267,6 +363,7 @@ export default function SoportePage() {
         })
         setCreateDialogOpen(false)
         resetForm()
+        setPendingFiles([])
         fetchTickets()
       } else {
         const error = await response.json()
@@ -279,7 +376,7 @@ export default function SoportePage() {
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Error de conexión',
+        description: 'Error de conexion',
         variant: 'destructive',
       })
     } finally {
@@ -289,7 +386,7 @@ export default function SoportePage() {
 
   const handleUpdateTicket = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!selectedTicket) return
 
     setSaving(true)
@@ -326,7 +423,7 @@ export default function SoportePage() {
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Error de conexión',
+        description: 'Error de conexion',
         variant: 'destructive',
       })
     } finally {
@@ -335,7 +432,7 @@ export default function SoportePage() {
   }
 
   const handleDeleteTicket = async (ticketId: string) => {
-    if (!confirm('¿Estás seguro de eliminar este ticket?')) return
+    if (!confirm('Estas seguro de eliminar este ticket?')) return
 
     try {
       const response = await fetch(`/api/tickets/${ticketId}`, {
@@ -359,7 +456,7 @@ export default function SoportePage() {
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Error de conexión',
+        description: 'Error de conexion',
         variant: 'destructive',
       })
     }
@@ -394,6 +491,7 @@ export default function SoportePage() {
       propertyId: '',
       response: '',
     })
+    setPendingFiles([])
   }
 
   const getStatusBadge = (status: string) => {
@@ -434,13 +532,13 @@ export default function SoportePage() {
       <Sidebar />
       <SidebarInset className="flex flex-col min-h-screen">
         <Header />
-        
+
         <main className="flex-1 p-4 md:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Soporte</h1>
-                <p className="text-muted-foreground">Gestión de tickets de soporte y mantenimiento</p>
+                <p className="text-muted-foreground">Gestion de tickets de soporte y mantenimiento</p>
               </div>
               <Button onClick={() => { resetForm(); setCreateDialogOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -453,8 +551,8 @@ export default function SoportePage() {
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      placeholder="Buscar tickets..." 
+                    <Input
+                      placeholder="Buscar tickets..."
                       className="pl-9"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -518,12 +616,15 @@ export default function SoportePage() {
                       {filteredTickets.map((ticket) => (
                         <TableRow key={ticket.id}>
                           <TableCell className="font-medium">
-                            <div>
+                            <div className="flex items-center gap-2">
                               <p>{ticket.title}</p>
-                              <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                {ticket.description}
-                              </p>
+                              {ticket.attachments && parseAttachments(ticket.attachments).length > 0 && (
+                                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                              )}
                             </div>
+                            <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                              {ticket.description}
+                            </p>
                           </TableCell>
                           <TableCell className="hidden md:table-cell text-muted-foreground">
                             {ticket.property.title}
@@ -557,7 +658,7 @@ export default function SoportePage() {
                                 {canModifyTicket(ticket) && (
                                   <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem 
+                                    <DropdownMenuItem
                                       className="text-destructive"
                                       onClick={() => handleDeleteTicket(ticket.id)}
                                     >
@@ -578,13 +679,13 @@ export default function SoportePage() {
             </Card>
           </div>
         </main>
-        
+
         <Footer />
       </SidebarInset>
 
       {/* Create Ticket Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nuevo Ticket de Soporte</DialogTitle>
             <DialogDescription>
@@ -606,15 +707,15 @@ export default function SoportePage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Título *</Label>
+              <Label>Titulo *</Label>
               <Input
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Descripción breve del problema"
+                placeholder="Descripcion breve del problema"
               />
             </div>
             <div className="space-y-2">
-              <Label>Descripción *</Label>
+              <Label>Descripcion *</Label>
               <Textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -624,7 +725,7 @@ export default function SoportePage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Categoría</Label>
+                <Label>Categoria</Label>
                 <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar" />
@@ -650,13 +751,71 @@ export default function SoportePage() {
                 </Select>
               </div>
             </div>
+            
+            {/* File Upload Section */}
+            <div className="space-y-2">
+              <Label>Archivos Adjuntos (PDF, imagenes - max 10MB cada uno)</Label>
+              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4">
+                <input
+                  type="file"
+                  id="file-upload"
+                  multiple
+                  accept=".pdf,image/jpeg,image/jpg,image/png,image/webp"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="flex flex-col items-center justify-center cursor-pointer py-4"
+                >
+                  <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                  <span className="text-sm text-muted-foreground">
+                    Haz clic para subir archivos
+                  </span>
+                  <span className="text-xs text-muted-foreground mt-1">
+                    PDF, JPG, PNG, WEBP hasta 10MB
+                  </span>
+                </label>
+              </div>
+              
+              {/* Pending files preview */}
+              {pendingFiles.length > 0 && (
+                <div className="space-y-2 mt-3">
+                  <p className="text-sm font-medium">Archivos seleccionados:</p>
+                  <div className="space-y-2">
+                    {pendingFiles.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between bg-muted/50 rounded-lg p-2">
+                        <div className="flex items-center gap-2">
+                          {file.preview === 'pdf' ? (
+                            <FileText className="h-8 w-8 text-red-500" />
+                          ) : (
+                            <img src={file.preview} alt="preview" className="h-8 w-8 object-cover rounded" />
+                          )}
+                          <span className="text-sm truncate max-w-[200px]">{file.file.name}</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => removePendingFile(index)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => { setCreateDialogOpen(false); resetForm(); }}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                Crear Ticket
+              <Button type="submit" disabled={saving || uploadingFiles}>
+                {(saving || uploadingFiles) ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                {uploadingFiles ? 'Subiendo archivos...' : saving ? 'Creando...' : 'Crear Ticket'}
               </Button>
             </DialogFooter>
           </form>
@@ -670,27 +829,27 @@ export default function SoportePage() {
             <DialogTitle>Editar Ticket</DialogTitle>
             <DialogDescription>
               {currentUser?.role === 'admin' || currentUser?.role === 'propietario'
-                ? 'Actualiza el estado, prioridad y añade una respuesta al ticket'
-                : 'Actualiza la información de tu ticket'}
+                ? 'Actualiza el estado, prioridad y anade una respuesta al ticket'
+                : 'Actualiza la informacion de tu ticket'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUpdateTicket} className="space-y-4">
             {(currentUser?.role === 'admin' || currentUser?.role === 'inquilino') && (
               <>
                 <div className="space-y-2">
-                  <Label>Título</Label>
+                  <Label>Titulo</Label>
                   <Input
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Título del ticket"
+                    placeholder="Titulo del ticket"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Descripción</Label>
+                  <Label>Descripcion</Label>
                   <Textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Descripción del problema"
+                    placeholder="Descripcion del problema"
                     rows={3}
                   />
                 </div>
@@ -726,10 +885,10 @@ export default function SoportePage() {
             </div>
             {(currentUser?.role === 'admin' || currentUser?.role === 'inquilino') && (
               <div className="space-y-2">
-                <Label>Categoría</Label>
+                <Label>Categoria</Label>
                 <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar categoría" />
+                    <SelectValue placeholder="Seleccionar categoria" />
                   </SelectTrigger>
                   <SelectContent>
                     {categoryOptions.map((c) => (
@@ -745,7 +904,7 @@ export default function SoportePage() {
                 <Textarea
                   value={formData.response}
                   onChange={(e) => setFormData({ ...formData, response: e.target.value })}
-                  placeholder="Añade una respuesta o actualización..."
+                  placeholder="Anade una respuesta o actualizacion..."
                   rows={4}
                 />
               </div>
@@ -765,7 +924,7 @@ export default function SoportePage() {
 
       {/* Detail Dialog */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalle del Ticket</DialogTitle>
           </DialogHeader>
@@ -782,11 +941,11 @@ export default function SoportePage() {
                 </div>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Título</p>
+                <p className="text-sm text-muted-foreground">Titulo</p>
                 <p className="font-medium">{selectedTicket.title}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Descripción</p>
+                <p className="text-sm text-muted-foreground">Descripcion</p>
                 <p>{selectedTicket.description}</p>
               </div>
               <div>
@@ -807,12 +966,53 @@ export default function SoportePage() {
               )}
               {selectedTicket.category && (
                 <div>
-                  <p className="text-sm text-muted-foreground">Categoría</p>
+                  <p className="text-sm text-muted-foreground">Categoria</p>
                   <p>{categoryOptions.find(c => c.value === selectedTicket.category)?.label || selectedTicket.category}</p>
                 </div>
               )}
+              
+              {/* Attachments Section */}
+              {selectedTicket.attachments && parseAttachments(selectedTicket.attachments).length > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Archivos Adjuntos</p>
+                  <div className="space-y-2">
+                    {parseAttachments(selectedTicket.attachments).map((attachment, index) => (
+                      <div key={index} className="flex items-center justify-between bg-muted/50 rounded-lg p-3">
+                        <div className="flex items-center gap-3">
+                          {attachment.type.includes('pdf') ? (
+                            <FileText className="h-8 w-8 text-red-500" />
+                          ) : (
+                            <img 
+                              src={attachment.url} 
+                              alt={attachment.name} 
+                              className="h-12 w-12 object-cover rounded"
+                            />
+                          )}
+                          <span className="text-sm truncate max-w-[150px]">{attachment.name}</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const link = document.createElement('a')
+                            link.href = attachment.url
+                            link.download = attachment.name
+                            link.target = '_blank'
+                            link.click()
+                          }}
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          Ver
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
               <div>
-                <p className="text-sm text-muted-foreground">Fecha de Creación</p>
+                <p className="text-sm text-muted-foreground">Fecha de Creacion</p>
                 <p>{new Date(selectedTicket.createdAt).toLocaleString('es-PA')}</p>
               </div>
             </div>
@@ -821,8 +1021,8 @@ export default function SoportePage() {
             <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>
               Cerrar
             </Button>
-            {(canModifyTicket(selectedTicket!) || canRespondToTicket(selectedTicket!)) && (
-              <Button onClick={() => { setDetailDialogOpen(false); openEditDialog(selectedTicket!); }}>
+            {selectedTicket && (canModifyTicket(selectedTicket) || canRespondToTicket(selectedTicket)) && (
+              <Button onClick={() => { setDetailDialogOpen(false); openEditDialog(selectedTicket); }}>
                 <Edit className="h-4 w-4 mr-2" />
                 Editar
               </Button>
