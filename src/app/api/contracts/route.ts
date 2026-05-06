@@ -12,6 +12,7 @@ const createContractSchema = z.object({
   depositAmount: z.number().min(0).optional(),
   terms: z.string().optional().nullable(),
   documentUrl: z.string().optional().nullable(),
+  attachments: z.string().optional().nullable(), // JSON string con array de archivos adjuntos
   propertyId: z.string().min(1, 'La propiedad es requerida'),
   ownerId: z.string().min(1, 'El propietario es requerido'),
   tenantId: z.string().optional().nullable(),
@@ -20,7 +21,7 @@ const createContractSchema = z.object({
 // GET - Listar contratos
 export async function GET(request: NextRequest) {
   let prisma;
-  
+
   try {
     prisma = getPrismaClient();
     const { searchParams } = new URL(request.url);
@@ -192,7 +193,7 @@ export async function POST(request: NextRequest) {
     // Validar fechas
     const startDate = new Date(validatedData.startDate);
     const endDate = new Date(validatedData.endDate);
-    
+
     if (startDate >= endDate) {
       return NextResponse.json(
         {
@@ -215,6 +216,7 @@ export async function POST(request: NextRequest) {
         depositAmount: validatedData.depositAmount ?? null,
         terms: validatedData.terms ?? null,
         documentUrl: validatedData.documentUrl ?? null,
+        attachments: validatedData.attachments ?? null, // Guardar attachments
         status: 'VIGENTE',
         propertyId: validatedData.propertyId,
         ownerId: validatedData.ownerId,
