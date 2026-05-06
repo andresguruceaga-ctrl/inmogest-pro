@@ -4,19 +4,20 @@ import { z } from 'zod';
 
 // Esquema de validación para actualizar contrato
 const updateContractSchema = z.object({
-  contractType: z.string().optional(),
   contractNumber: z.string().min(1, 'El número de contrato es requerido').optional(),
+  contractType: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   monthlyAmount: z.number().min(0, 'El monto mensual debe ser válido').optional(),
-  itbmsRate: z.number().min(0).max(100).optional(),
   depositAmount: z.number().min(0).optional().nullable(),
   terms: z.string().optional().nullable(),
+  documentUrl: z.string().optional().nullable(),
+  attachments: z.string().optional().nullable(), // JSON string con array de archivos adjuntos
   status: z.string().optional(),
   tenantId: z.string().optional().nullable(),
 });
 
-// GET - Obtener un contrato por ID
+// GET - Obtener contrato por ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -56,9 +57,17 @@ export async function GET(
             phone: true,
           },
         },
-        _count: {
+        payments: {
           select: {
-            payments: true,
+            id: true,
+            amount: true,
+            paymentDate: true,
+            paymentMethod: true,
+            status: true,
+            receiptNumber: true,
+          },
+          orderBy: {
+            paymentDate: 'desc',
           },
         },
       },
@@ -119,7 +128,7 @@ export async function PUT(
     prisma = getPrismaClient();
     const { id } = await params;
     const body = await request.json();
-    console.log('Received contract update data:', JSON.stringify(body, null, 2));
+    console.log('Received update data for contract:', id, JSON.stringify(body, null, 2));
 
     // Validar datos de entrada
     const validatedData = updateContractSchema.parse(body);
@@ -142,40 +151,54 @@ export async function PUT(
     // Preparar datos de actualización
     const updateData: Record<string, unknown> = {};
 
-    if (validatedData.contractType) {
-      updateData.contractType = validatedData.contractType;
-    }
-    if (validatedData.contractNumber) {
+    if (validatedData.contractNumber !== undefined) {
       updateData.contractNumber = validatedData.contractNumber;
     }
-    if (validatedData.startDate) {
+
+    if (validatedData.contractType !== undefined) {
+      updateData.contractType = validatedData.contractType;
+    }
+
+    if (validatedData.startDate !== undefined) {
       updateData.startDate = new Date(validatedData.startDate);
     }
-    if (validatedData.endDate) {
+
+    if (validatedData.endDate !== undefined) {
       updateData.endDate = new Date(validatedData.endDate);
     }
+
     if (validatedData.monthlyAmount !== undefined) {
-      const itbmsRate = validatedData.itbmsRate ?? 7.0;
       updateData.monthlyAmount = validatedData.monthlyAmount;
-      updateData.itbmsAmount = validatedData.monthlyAmount * (itbmsRate / 100);
     }
+
     if (validatedData.depositAmount !== undefined) {
       updateData.depositAmount = validatedData.depositAmount;
     }
+
     if (validatedData.terms !== undefined) {
       updateData.terms = validatedData.terms;
     }
-    if (validatedData.status) {
-      updateData.status = validatedData.status;
-    }
-    if (validatedData.tenantId !== undefined) {
-      updateData.tenantId = validatedData.tenantId;
+
+    if (validatedData.documentUrl !== undefined) {
+      updateData.documentUrl = validatedData.documentUrl;
     }
 
-    // Validar fechas si se proporcionan
+    if (validatedData.attachments !== undefined) {
+      updateData.attachments = validatedData.attachments;
+    }
+
+    if (validatedData.status !== undefined) {
+      updateData.status = validatedData.status;
+    }
+
+    if (validatedData.tenantId !== undefined) {
+      updateData.tenantId = validatedData.tenantId || null;
+    }
+
+    // Validar fechas si ambas están presentes
     const startDate = updateData.startDate as Date | undefined;
     const endDate = updateData.endDate as Date | undefined;
-    
+
     if (startDate && endDate && startDate >= endDate) {
       return NextResponse.json(
         {
@@ -214,17 +237,6 @@ export async function PUT(
         },
       },
     });
-
-    // Si se actualiza el inquilino, actualizar la propiedad
-    if (validatedData.tenantId !== undefined && existingContract.contractType === 'ARRENDAMIENTO') {
-      await prisma.property.update({
-        where: { id: existingContract.propertyId },
-        data: {
-          tenantId: validatedData.tenantId,
-          status: validatedData.tenantId ? 'OCUPADA' : 'DISPONIBLE',
-        },
-      });
-    }
 
     console.log('Contract updated successfully:', contract.id);
 
@@ -276,6 +288,13 @@ export async function DELETE(
     // Verificar que el contrato existe
     const existingContract = await prisma.contract.findUnique({
       where: { id },
+      include: {
+        _count: {
+          select: {
+            payments: true,
+          },
+        },
+      },
     });
 
     if (!existingContract) {
@@ -288,12 +307,8 @@ export async function DELETE(
       );
     }
 
-    // Verificar si hay pagos asociados
-    const paymentsCount = await prisma.payment.count({
-      where: { contractId: id },
-    });
-
-    if (paymentsCount > 0) {
+    // Verificar si tiene pagos asociados
+    if (existingContract._count.payments > 0) {
       return NextResponse.json(
         {
           success: false,
@@ -307,17 +322,6 @@ export async function DELETE(
     await prisma.contract.delete({
       where: { id },
     });
-
-    // Si es contrato de arrendamiento, actualizar la propiedad
-    if (existingContract.contractType === 'ARRENDAMIENTO') {
-      await prisma.property.update({
-        where: { id: existingContract.propertyId },
-        data: {
-          tenantId: null,
-          status: 'DISPONIBLE',
-        },
-      });
-    }
 
     console.log('Contract deleted successfully:', id);
 
