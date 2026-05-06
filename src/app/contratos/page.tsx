@@ -190,32 +190,36 @@ export default function ContratosPage() {
           continue
         }
 
-        // Convertir a base64
-        const base64 = await fileToBase64(file)
+        // Crear FormData y subir
+        const formDataToSend = new FormData()
+        formDataToSend.append('file', file)
 
-        // Subir al servidor
         const response = await fetch('/api/upload', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            file: base64,
-            filename: file.name,
-            filetype: file.type,
-          }),
+          body: formDataToSend,
         })
 
         if (response.ok) {
           const data = await response.json()
-          setAttachments(prev => [...prev, {
-            name: file.name,
-            url: data.url,
-            type: file.type,
-            size: file.size,
-          }])
+          if (data.success) {
+            setAttachments(prev => [...prev, {
+              name: file.name,
+              url: data.data.fileUrl,
+              type: file.type,
+              size: file.size,
+            }])
+          } else {
+            toast({
+              title: 'Error al subir',
+              description: data.error || `No se pudo subir ${file.name}`,
+              variant: 'destructive',
+            })
+          }
         } else {
+          const errorData = await response.json()
           toast({
             title: 'Error al subir',
-            description: `No se pudo subir ${file.name}`,
+            description: errorData.error || `No se pudo subir ${file.name}`,
             variant: 'destructive',
           })
         }
@@ -263,30 +267,36 @@ export default function ContratosPage() {
           continue
         }
 
-        const base64 = await fileToBase64(file)
+        // Crear FormData y subir
+        const formDataToSend = new FormData()
+        formDataToSend.append('file', file)
 
         const response = await fetch('/api/upload', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            file: base64,
-            filename: file.name,
-            filetype: file.type,
-          }),
+          body: formDataToSend,
         })
 
         if (response.ok) {
           const data = await response.json()
-          setEditAttachments(prev => [...prev, {
-            name: file.name,
-            url: data.url,
-            type: file.type,
-            size: file.size,
-          }])
+          if (data.success) {
+            setEditAttachments(prev => [...prev, {
+              name: file.name,
+              url: data.data.fileUrl,
+              type: file.type,
+              size: file.size,
+            }])
+          } else {
+            toast({
+              title: 'Error al subir',
+              description: data.error || `No se pudo subir ${file.name}`,
+              variant: 'destructive',
+            })
+          }
         } else {
+          const errorData = await response.json()
           toast({
             title: 'Error al subir',
-            description: `No se pudo subir ${file.name}`,
+            description: errorData.error || `No se pudo subir ${file.name}`,
             variant: 'destructive',
           })
         }
@@ -304,16 +314,6 @@ export default function ContratosPage() {
         editFileInputRef.current.value = ''
       }
     }
-  }
-
-  // Función para convertir archivo a base64
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = error => reject(error)
-    })
   }
 
   // Función para eliminar un adjunto
