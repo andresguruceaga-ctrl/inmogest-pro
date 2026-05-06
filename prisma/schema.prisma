@@ -98,6 +98,7 @@ model Contract {
   depositAmount  Float?
   terms          String?
   documentUrl    String?
+  attachments    String?        // JSON string con array de archivos adjuntos
   status         ContractStatus @default(VIGENTE)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
