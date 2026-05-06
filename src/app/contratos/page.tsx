@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { Footer } from '@/components/layout/footer'
@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { FileText, Plus, Search, Filter, MoreHorizontal, Eye, Download, Calendar, User, Building2, Loader2, Trash2, Edit } from 'lucide-react'
+import { FileText, Plus, Search, Filter, MoreHorizontal, Eye, Download, Calendar, User, Building2, Loader2, Trash2, Edit, Upload, X, FileIcon, ImageIcon } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -20,6 +20,14 @@ import { useToast } from '@/hooks/use-toast'
 import { Separator } from '@/components/ui/separator'
 import { Progress } from '@/components/ui/progress'
 import { generateContractPDF } from '@/lib/pdf-utils'
+
+// Interfaz para archivos adjuntos
+interface Attachment {
+  name: string
+  url: string
+  type: string
+  size: number
+}
 
 interface Contract {
   id: string
@@ -30,6 +38,8 @@ interface Contract {
   monthlyAmount: number
   depositAmount: number | null
   terms: string | null
+  documentUrl: string | null
+  attachments: string | null
   status: string
   property: { id: string; title: string; address: string } | null
   owner: { id: string; name: string; email: string; phone?: string } | null
@@ -85,11 +95,19 @@ export default function ContratosPage() {
     tenantId: '',
     status: 'VIGENTE' as typeof CONTRACT_STATUSES[number],
   })
+  const [editAttachments, setEditAttachments] = useState<Attachment[]>([])
+  const [editUploading, setEditUploading] = useState(false)
 
   // Delete confirmation state
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // File upload state
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
     contractType: 'ARRENDAMIENTO' as typeof CONTRACT_TYPES[number],
@@ -142,9 +160,197 @@ export default function ContratosPage() {
     }
   }
 
+  // Función para manejar la subida de archivos
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    setUploading(true)
+
+    try {
+      for (const file of Array.from(files)) {
+        // Validar tipo de archivo
+        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+        if (!allowedTypes.includes(file.type)) {
+          toast({
+            title: 'Archivo no permitido',
+            description: `${file.name} no es un archivo permitido. Solo PDF, JPG, PNG, WEBP.`,
+            variant: 'destructive',
+          })
+          continue
+        }
+
+        // Validar tamaño (máximo 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          toast({
+            title: 'Archivo muy grande',
+            description: `${file.name} excede el límite de 10MB.`,
+            variant: 'destructive',
+          })
+          continue
+        }
+
+        // Convertir a base64
+        const base64 = await fileToBase64(file)
+
+        // Subir al servidor
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file: base64,
+            filename: file.name,
+            filetype: file.type,
+          }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setAttachments(prev => [...prev, {
+            name: file.name,
+            url: data.url,
+            type: file.type,
+            size: file.size,
+          }])
+        } else {
+          toast({
+            title: 'Error al subir',
+            description: `No se pudo subir ${file.name}`,
+            variant: 'destructive',
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading files:', error)
+      toast({
+        title: 'Error',
+        description: 'Error al subir los archivos',
+        variant: 'destructive',
+      })
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  // Función para subir archivos en el modo edición
+  const handleEditFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    setEditUploading(true)
+
+    try {
+      for (const file of Array.from(files)) {
+        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+        if (!allowedTypes.includes(file.type)) {
+          toast({
+            title: 'Archivo no permitido',
+            description: `${file.name} no es un archivo permitido. Solo PDF, JPG, PNG, WEBP.`,
+            variant: 'destructive',
+          })
+          continue
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+          toast({
+            title: 'Archivo muy grande',
+            description: `${file.name} excede el límite de 10MB.`,
+            variant: 'destructive',
+          })
+          continue
+        }
+
+        const base64 = await fileToBase64(file)
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file: base64,
+            filename: file.name,
+            filetype: file.type,
+          }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setEditAttachments(prev => [...prev, {
+            name: file.name,
+            url: data.url,
+            type: file.type,
+            size: file.size,
+          }])
+        } else {
+          toast({
+            title: 'Error al subir',
+            description: `No se pudo subir ${file.name}`,
+            variant: 'destructive',
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading files:', error)
+      toast({
+        title: 'Error',
+        description: 'Error al subir los archivos',
+        variant: 'destructive',
+      })
+    } finally {
+      setEditUploading(false)
+      if (editFileInputRef.current) {
+        editFileInputRef.current.value = ''
+      }
+    }
+  }
+
+  // Función para convertir archivo a base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = error => reject(error)
+    })
+  }
+
+  // Función para eliminar un adjunto
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const removeEditAttachment = (index: number) => {
+    setEditAttachments(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // Función para formatear tamaño de archivo
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  // Función para obtener icono según tipo de archivo
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('image/')) return <ImageIcon className="h-4 w-4" />
+    return <FileIcon className="h-4 w-4" />
+  }
+
+  // Función para parsear attachments de un contrato
+  const parseAttachments = (attachmentsStr: string | null): Attachment[] => {
+    if (!attachmentsStr) return []
+    try {
+      return JSON.parse(attachmentsStr)
+    } catch {
+      return []
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!formData.propertyId || !formData.contractNumber || !formData.startDate || !formData.endDate || !formData.monthlyAmount) {
       toast({
         title: 'Error',
@@ -181,6 +387,7 @@ export default function ContratosPage() {
           propertyId: formData.propertyId,
           ownerId: selectedProperty.ownerId,
           tenantId: formData.tenantId || null,
+          attachments: attachments.length > 0 ? JSON.stringify(attachments) : null,
         }),
       })
 
@@ -214,7 +421,7 @@ export default function ContratosPage() {
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!editingContract || !editFormData.contractNumber || !editFormData.startDate || !editFormData.endDate || !editFormData.monthlyAmount) {
       toast({
         title: 'Error',
@@ -250,6 +457,7 @@ export default function ContratosPage() {
           terms: editFormData.terms || null,
           status: editFormData.status,
           tenantId: editFormData.tenantId || null,
+          attachments: editAttachments.length > 0 ? JSON.stringify(editAttachments) : null,
         }),
       })
 
@@ -283,7 +491,7 @@ export default function ContratosPage() {
 
   const handleDelete = async () => {
     if (!deletingId) return
-    
+
     setDeleting(true)
 
     try {
@@ -344,9 +552,9 @@ export default function ContratosPage() {
         monthlyRent: contract.monthlyAmount ?? 0,
         depositAmount: contract.depositAmount ?? undefined
       })
-      
+
       doc.save(`contrato_${contract.contractNumber || 'download'}.pdf`)
-      
+
       toast({
         title: 'PDF descargado',
         description: 'El contrato se ha descargado exitosamente.',
@@ -424,6 +632,10 @@ export default function ContratosPage() {
       ? contract.status as typeof CONTRACT_STATUSES[number]
       : 'VIGENTE'
 
+    // Parsear attachments existentes
+    const existingAttachments = parseAttachments(contract.attachments)
+    setEditAttachments(existingAttachments)
+
     setEditFormData({
       contractType,
       contractNumber: contract.contractNumber || '',
@@ -435,7 +647,7 @@ export default function ContratosPage() {
       tenantId: contract.tenant?.id || '',
       status,
     })
-    
+
     setEditOpen(true)
   }
 
@@ -457,6 +669,7 @@ export default function ContratosPage() {
       ownerId: '',
       tenantId: '',
     })
+    setAttachments([])
   }
 
   const formatDate = (dateStr: string) => {
@@ -487,14 +700,14 @@ export default function ContratosPage() {
       const start = new Date(startDate).getTime()
       const end = new Date(endDate).getTime()
       const now = new Date().getTime()
-      
+
       if (isNaN(start) || isNaN(end)) return 0
       if (now < start) return 0
       if (now > end) return 100
-      
+
       const total = end - start
       if (total <= 0) return 0
-      
+
       const elapsed = now - start
       return Math.round((elapsed / total) * 100)
     } catch {
@@ -507,7 +720,7 @@ export default function ContratosPage() {
       <Sidebar />
       <SidebarInset className="flex flex-col min-h-screen">
         <Header />
-        
+
         <main className="flex-1 p-4 md:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -617,7 +830,7 @@ export default function ContratosPage() {
                                   <Edit className="h-4 w-4 mr-2" />
                                   Editar
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   className="text-destructive"
                                   onClick={() => openDelete(contract.id)}
                                 >
@@ -636,7 +849,7 @@ export default function ContratosPage() {
             </Card>
           </div>
         </main>
-        
+
         <Footer />
       </SidebarInset>
 
@@ -753,6 +966,76 @@ export default function ContratosPage() {
                 placeholder="Condiciones del contrato..."
               />
             </div>
+
+            {/* Sección de Archivos Adjuntos */}
+            <div className="space-y-2">
+              <Label>Archivos Adjuntos</Label>
+              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <div className="flex flex-col items-center gap-2">
+                  <Upload className="h-8 w-8 text-muted-foreground" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Subiendo...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Seleccionar archivos
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    PDF, JPG, PNG, WEBP hasta 10MB cada uno
+                  </p>
+                </div>
+              </div>
+
+              {/* Lista de archivos adjuntos */}
+              {attachments.length > 0 && (
+                <div className="space-y-2 mt-3">
+                  {attachments.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-2 bg-muted/50 rounded-lg"
+                    >
+                      <div className="flex items-center gap-2">
+                        {getFileIcon(file.type)}
+                        <div>
+                          <p className="text-sm font-medium">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(file.size)}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeAttachment(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancelar
@@ -795,9 +1078,9 @@ export default function ContratosPage() {
                   <p className="text-xs text-muted-foreground">{selectedContract.property?.address}</p>
                 </div>
               </div>
-              
+
               <Separator />
-              
+
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Vigencia</p>
                 <div className="flex items-center gap-4 text-sm">
@@ -811,21 +1094,21 @@ export default function ContratosPage() {
                     <span>{formatDate(selectedContract.endDate)}</span>
                   </div>
                 </div>
-                
+
                 <div className="mt-3">
                   <div className="flex justify-between text-xs text-muted-foreground mb-1">
                     <span>Progreso</span>
                     <span>{selectedContract.daysRemaining} días restantes</span>
                   </div>
-                  <Progress 
-                    value={getContractProgress(selectedContract.startDate, selectedContract.endDate)} 
+                  <Progress
+                    value={getContractProgress(selectedContract.startDate, selectedContract.endDate)}
                     className="h-2"
                   />
                 </div>
               </div>
-              
+
               <Separator />
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Propietario</p>
@@ -850,9 +1133,9 @@ export default function ContratosPage() {
                   )}
                 </div>
               </div>
-              
+
               <Separator />
-              
+
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="font-medium text-lg">Monto mensual:</span>
@@ -874,6 +1157,43 @@ export default function ContratosPage() {
                   <div>
                     <p className="text-sm text-muted-foreground mb-2">Términos y Condiciones</p>
                     <p className="text-sm bg-muted/50 rounded-lg p-3">{selectedContract.terms}</p>
+                  </div>
+                </>
+              )}
+
+              {/* Archivos Adjuntos */}
+              {parseAttachments(selectedContract.attachments).length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Archivos Adjuntos</p>
+                    <div className="space-y-2">
+                      {parseAttachments(selectedContract.attachments).map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-2 bg-muted/50 rounded-lg"
+                        >
+                          <div className="flex items-center gap-2">
+                            {getFileIcon(file.type)}
+                            <div>
+                              <p className="text-sm font-medium">{file.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatFileSize(file.size)}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(file.url, '_blank')}
+                          >
+                            <Download className="h-4 w-4 mr-1" />
+                            Ver
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </>
               )}
@@ -950,8 +1270,8 @@ export default function ContratosPage() {
               {editFormData.contractType === 'ARRENDAMIENTO' && (
                 <div className="space-y-2">
                   <Label htmlFor="edit-tenantId">Inquilino</Label>
-                  <Select 
-                    value={validEditTenantId || undefined} 
+                  <Select
+                    value={validEditTenantId || undefined}
                     onValueChange={(v) => setEditFormData({...editFormData, tenantId: v})}
                   >
                     <SelectTrigger>
@@ -1017,6 +1337,76 @@ export default function ContratosPage() {
                 placeholder="Condiciones del contrato..."
               />
             </div>
+
+            {/* Sección de Archivos Adjuntos en Edición */}
+            <div className="space-y-2">
+              <Label>Archivos Adjuntos</Label>
+              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4">
+                <input
+                  ref={editFileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  onChange={handleEditFileUpload}
+                  className="hidden"
+                />
+                <div className="flex flex-col items-center gap-2">
+                  <Upload className="h-8 w-8 text-muted-foreground" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => editFileInputRef.current?.click()}
+                    disabled={editUploading}
+                  >
+                    {editUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Subiendo...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Agregar archivos
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    PDF, JPG, PNG, WEBP hasta 10MB cada uno
+                  </p>
+                </div>
+              </div>
+
+              {/* Lista de archivos adjuntos en edición */}
+              {editAttachments.length > 0 && (
+                <div className="space-y-2 mt-3">
+                  {editAttachments.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-2 bg-muted/50 rounded-lg"
+                    >
+                      <div className="flex items-center gap-2">
+                        {getFileIcon(file.type)}
+                        <div>
+                          <p className="text-sm font-medium">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(file.size)}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeEditAttachment(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
                 Cancelar
