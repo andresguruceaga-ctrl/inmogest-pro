@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
@@ -107,15 +107,15 @@ export default function MisContratosPage() {
   const [userRole, setUserRole] = useState<string | null>(null)
   const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
-  const [mounted, setMounted] = useState(false)
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false
+  )
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   // Get user from localStorage
   useEffect(() => {
@@ -126,8 +126,10 @@ export default function MisContratosPage() {
           const parsed = JSON.parse(stored)
           const id = parsed?.state?.user?.id
           const role = parsed?.state?.user?.role
-          setUserId(id)
-          setUserRole(role)
+          queueMicrotask(() => {
+            setUserId(id)
+            setUserRole(role)
+          })
           
           // Redirect if not authenticated
           if (!id) {
@@ -146,11 +148,13 @@ export default function MisContratosPage() {
 
   useEffect(() => {
     if (userId) {
-      fetchContracts()
+      // Function declarations are hoisted; defer the stateful fetch until after the effect.
+      // eslint-disable-next-line react-hooks/immutability
+      queueMicrotask(() => void fetchContracts())
     }
   }, [userId])
 
-  const fetchContracts = async () => {
+  async function fetchContracts() {
     if (!userId) return
     
     try {

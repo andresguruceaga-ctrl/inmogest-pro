@@ -895,7 +895,7 @@ export async function generateContractPDF(data: {
       phone?: string
     }
   }
-}): Promise<Buffer> {
+}): Promise<jsPDF> {
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
   
@@ -948,5 +948,5 @@ export async function generateContractPDF(data: {
     }
   }
   
-  return Buffer.from(doc.output('arraybuffer'))
+  return doc
 }

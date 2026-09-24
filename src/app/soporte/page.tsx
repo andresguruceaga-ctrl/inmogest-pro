@@ -126,7 +126,7 @@ export default function SoportePage() {
       try {
         const parsed = JSON.parse(userStr)
         if (parsed.state?.user) {
-          setCurrentUser(parsed.state.user)
+          queueMicrotask(() => setCurrentUser(parsed.state.user))
         }
       } catch (e) {
         console.error('Error parsing user from localStorage:', e)
@@ -136,12 +136,14 @@ export default function SoportePage() {
 
   useEffect(() => {
     if (currentUser) {
-      fetchTickets()
-      fetchProperties()
+      queueMicrotask(() => {
+        void fetchTickets()
+        void fetchProperties()
+      })
     }
   }, [currentUser])
 
-  const fetchTickets = async () => {
+  async function fetchTickets() {
     try {
       let url = '/api/tickets'
 
@@ -185,7 +187,7 @@ export default function SoportePage() {
     }
   }
 
-  const fetchProperties = async () => {
+  async function fetchProperties() {
     try {
       const response = await fetch('/api/properties')
       if (response.ok) {

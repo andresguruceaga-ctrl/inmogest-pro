@@ -147,9 +147,7 @@ export default function GastosPage() {
   }
 
   useEffect(() => {
-    // fetchData only updates state after its requests resolve.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchData()
+    queueMicrotask(() => void fetchData())
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -77,10 +77,10 @@ export default function DocumentosPage() {
   })
 
   useEffect(() => {
-    fetchData()
+    queueMicrotask(() => void fetchData())
   }, [])
 
-  const fetchData = async () => {
+  async function fetchData() {
     try {
       const [documentsRes, propertiesRes, adminsRes] = await Promise.all([
         fetch('/api/documents'),

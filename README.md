@@ -144,7 +144,9 @@ El sistema incluye usuarios de prueba:
 | Inquilino | juan.perez@email.com | demo123 |
 | Propietario | pedro.gonzalez@email.com | demo123 |
 
-Para crear los usuarios demo, visita: `http://localhost:3000/api/seed`
+La carga de datos demo está restringida a sesiones con rol `ADMIN`. En un
+entorno de desarrollo, un administrador autenticado puede abrir
+`http://localhost:3000/api/seed`.
 
 ## 📁 Estructura del Proyecto
 

@@ -146,7 +146,7 @@ export async function PUT(
         {
           success: false,
           error: 'Datos de entrada invalidos',
-          details: error.errors,
+          details: error.issues,
         },
         { status: 400 }
       );

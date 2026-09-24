@@ -310,7 +310,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: 'Datos de entrada inválidos',
-          details: error.errors,
+          details: error.issues,
         },
         { status: 400 }
       );

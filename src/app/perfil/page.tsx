@@ -90,22 +90,24 @@ export default function PerfilPage() {
     if (!user) {
       router.push('/login')
     } else {
-      // Populate form with user data
-      setFormData({
-        name: user.name || '',
-        email: user.email || '',
-        phone: user.phone || '',
+      queueMicrotask(() => {
+        setFormData({
+          name: user.name || '',
+          email: user.email || '',
+          phone: user.phone || '',
+        })
+
+        if (user.role === 'propietario') {
+          // Function declarations are hoisted; this runs after the effect callback.
+          // eslint-disable-next-line react-hooks/immutability
+          void fetchDocuments(user.id)
+        }
       })
-      
-      // Load documents if user is propietario
-      if (user.role === 'propietario') {
-        fetchDocuments(user.id)
-      }
     }
   }, [user, router])
 
   // Fetch owner documents
-  const fetchDocuments = async (ownerId: string) => {
+  async function fetchDocuments(ownerId: string) {
     setDocumentsLoading(true)
     try {
       const response = await fetch(`/api/documents/owner?ownerId=${ownerId}`)

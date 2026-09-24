@@ -249,12 +249,12 @@ export async function PUT(
     console.error('Error al actualizar contrato:', error);
 
     if (error instanceof z.ZodError) {
-      console.log('Zod validation errors:', JSON.stringify(error.errors, null, 2));
+      console.log('Zod validation errors:', JSON.stringify(error.issues, null, 2));
       return NextResponse.json(
         {
           success: false,
           error: 'Datos de entrada inválidos',
-          details: error.errors.map(e => ({
+          details: error.issues.map(e => ({
             field: e.path.join('.'),
             message: e.message
           })),

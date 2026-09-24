@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { calculateFinancialTotals } from '@/lib/finance';
 import { getPrismaClient } from '@/lib/prisma';
 
 // GET - Obtener estadísticas del dashboard
@@ -371,10 +372,11 @@ export async function GET(request: NextRequest) {
         select: { amount: true, expenseType: true, category: true },
       });
 
-      const totalExpenses = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+      const financialTotals = calculateFinancialTotals(monthPayments, monthExpenses);
+      const totalExpenses = financialTotals.totalExpenses;
       const fixedExpenses = monthExpenses.filter(e => e.expenseType === 'FIJO').reduce((sum, e) => sum + e.amount, 0);
       const variableExpenses = monthExpenses.filter(e => e.expenseType === 'VARIABLE').reduce((sum, e) => sum + e.amount, 0);
-      const expensesItbms = 0;
+      const expensesItbms = financialTotals.expensesItbms;
 
       // Neto
       const netIncome = monthIncome - totalExpenses;

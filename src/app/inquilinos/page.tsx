@@ -152,10 +152,10 @@ export default function InquilinosPage() {
   })
 
   useEffect(() => {
-    fetchData()
+    queueMicrotask(() => void fetchData())
   }, [])
 
-  const fetchData = async () => {
+  async function fetchData() {
     try {
       const [tenantsRes, propertiesRes, ticketsRes] = await Promise.all([
         fetch('/api/users?role=INQUILINO'),

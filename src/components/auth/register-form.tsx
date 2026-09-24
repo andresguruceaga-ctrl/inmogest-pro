@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Button } from '@/components/ui/button'
@@ -49,7 +49,7 @@ const registerSchema = z
     confirmPassword: z.string(),
     phone: z.string().optional(),
     role: z.enum(['INQUILINO', 'PROPIETARIO', 'ADMIN'], {
-      required_error: 'Debes seleccionar un rol',
+      error: 'Debes seleccionar un rol',
     }),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -91,7 +91,7 @@ export function RegisterForm({ onToggleForm }: RegisterFormProps) {
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
@@ -104,7 +104,7 @@ export function RegisterForm({ onToggleForm }: RegisterFormProps) {
     },
   })
 
-  const selectedRole = watch('role')
+  const selectedRole = useWatch({ control, name: 'role' })
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true)

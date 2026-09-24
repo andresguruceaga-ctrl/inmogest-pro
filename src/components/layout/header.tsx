@@ -40,11 +40,11 @@ import { useSidebar, SidebarTrigger } from '@/components/ui/sidebar'
 // Theme toggle component
 function ThemeToggle() {
   const { theme, setTheme } = useAppStore()
-  const [mounted, setMounted] = React.useState(false)
-
-  React.useEffect(() => {
-    setMounted(true)
-  }, [])
+  const mounted = React.useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false
+  )
 
   if (!mounted) return null
 

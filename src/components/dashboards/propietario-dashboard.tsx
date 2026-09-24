@@ -379,10 +379,12 @@ export function PropietarioDashboard({ userId: propUserId }: PropietarioDashboar
   useEffect(() => {
     if (!effectiveUserId) return
     
-    fetchReportData(effectiveUserId)
+    // Function declarations are hoisted; defer the stateful fetch until after the effect.
+    // eslint-disable-next-line react-hooks/immutability
+    queueMicrotask(() => void fetchReportData(effectiveUserId))
   }, [effectiveUserId, period, selectedMonth, selectedYear])
 
-  const fetchReportData = async (targetUserId: string) => {
+  async function fetchReportData(targetUserId: string) {
     setLoading(true)
     try {
       const params = new URLSearchParams({

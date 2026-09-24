@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
+import { normalizeExpenseAmounts } from '@/lib/finance';
 
 // Esquema de validación para actualizar gasto
 const updateExpenseSchema = z.object({
@@ -135,14 +136,16 @@ export async function PUT(
     if (validatedData.expenseType) {
       updateData.expenseType = validatedData.expenseType;
     }
-    const expenseAmount = validatedData.amount ?? existingExpense.amount;
+    const expenseAmounts = normalizeExpenseAmounts(
+      validatedData.amount ?? existingExpense.amount
+    );
     if (validatedData.amount !== undefined) {
-      updateData.amount = validatedData.amount;
+      updateData.amount = expenseAmounts.amount;
     }
     // Los gastos nunca llevan ITBMS. Tambien sanea registros antiguos al editar
     // cualquier campo, aunque el importe no haya cambiado.
-    updateData.itbmsAmount = 0;
-    updateData.totalAmount = expenseAmount;
+    updateData.itbmsAmount = expenseAmounts.itbmsAmount;
+    updateData.totalAmount = expenseAmounts.totalAmount;
     if (validatedData.invoiceNumber !== undefined) {
       updateData.invoiceNumber = validatedData.invoiceNumber;
     }

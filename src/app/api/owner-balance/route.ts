@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
     const totals = {
       totalPending: propertyBalances.reduce((sum, p) => sum + (p?.totals.pending || 0), 0),
       totalPayments: propertyBalances.reduce((sum, p) => sum + (p?.totals.payments || 0), 0),
-      totalBalance: propertyBalances.reduce((sum, p) => sum => (p?.totals.balance || 0), 0),
+      totalBalance: propertyBalances.reduce((sum, p) => sum + (p?.totals.balance || 0), 0),
     };
 
     return NextResponse.json({

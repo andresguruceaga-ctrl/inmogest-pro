@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -75,30 +75,31 @@ const statusLabels: Record<string, { label: string; color: string }> = {
 export function PropertyDetailDialog({ property, open, onOpenChange }: PropertyDetailDialogProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [imageUrls, setImageUrls] = useState<string[]>([])
   const { toast } = useToast()
 
-  useEffect(() => {
-    if (property) {
-      const urls: string[] = []
-      if (property.mainImage) {
-        urls.push(property.mainImage)
-      }
-      if (property.images) {
-        try {
-          const parsed = JSON.parse(property.images)
-          for (const url of parsed) {
-            if (url !== property.mainImage) {
-              urls.push(url)
-            }
+  const imageUrls = useMemo(() => {
+    if (!property) return []
+
+    const urls: string[] = []
+    if (property.mainImage) urls.push(property.mainImage)
+    if (property.images) {
+      try {
+        const parsed = JSON.parse(property.images)
+        for (const url of parsed) {
+          if (url !== property.mainImage) {
+            urls.push(url)
           }
-        } catch (e) {
-          console.error('Error parsing images:', e)
         }
+      } catch (error) {
+        console.error('Error parsing images:', error)
       }
-      setImageUrls(urls)
-      setCurrentImageIndex(0)
     }
+
+    return urls
+  }, [property])
+
+  useEffect(() => {
+    queueMicrotask(() => setCurrentImageIndex(0))
   }, [property])
 
   const formatCurrency = (amount: number) => {
@@ -184,7 +185,7 @@ export function PropertyDetailDialog({ property, open, onOpenChange }: PropertyD
         `Baños: ${property.bathrooms}`,
         `Estacionamientos: ${property.parkingSpaces}`,
         property.floorNumber ? `Piso: ${property.floorNumber}` : null,
-      ].filter(Boolean)
+      ].filter((line): line is string => Boolean(line))
 
       infoLines.forEach(line => {
         doc.text(line, 14, y)
@@ -208,7 +209,7 @@ export function PropertyDetailDialog({ property, open, onOpenChange }: PropertyD
         `Provincia: ${property.province}`,
         property.neighborhood ? `Barrio: ${property.neighborhood}` : null,
         property.buildingName ? `Edificio: ${property.buildingName}` : null,
-      ].filter(Boolean)
+      ].filter((line): line is string => Boolean(line))
 
       locationLines.forEach(line => {
         doc.text(line, 14, y)
@@ -231,7 +232,7 @@ export function PropertyDetailDialog({ property, open, onOpenChange }: PropertyD
         property.tomoNumber ? `Tomo: ${property.tomoNumber}` : null,
         property.folioNumber ? `Folio: ${property.folioNumber}` : null,
         property.asientoNumber ? `Asiento: ${property.asientoNumber}` : null,
-      ].filter(Boolean)
+      ].filter((line): line is string => Boolean(line))
 
       legalLines.forEach(line => {
         doc.text(line, 14, y)

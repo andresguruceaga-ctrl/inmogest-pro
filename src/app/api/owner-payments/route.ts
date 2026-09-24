@@ -34,13 +34,14 @@ export async function GET(request: NextRequest) {
     }
     
     if (startDate || endDate) {
-      where.paymentDate = {};
+      const paymentDate: { gte?: Date; lte?: Date } = {};
       if (startDate) {
-        where.paymentDate = { ...where.paymentDate, gte: new Date(startDate) };
+        paymentDate.gte = new Date(startDate);
       }
       if (endDate) {
-        where.paymentDate = { ...where.paymentDate, lte: new Date(endDate) };
+        paymentDate.lte = new Date(endDate);
       }
+      where.paymentDate = paymentDate;
     }
 
     const payments = await db.ownerPayment.findMany({
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest) {
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Datos invalidos', details: error.errors },
+        { success: false, error: 'Datos invalidos', details: error.issues },
         { status: 400 }
       );
     }

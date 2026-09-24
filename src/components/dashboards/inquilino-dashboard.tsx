@@ -143,10 +143,12 @@ export function InquilinoDashboard({ userId: propUserId }: InquilinoDashboardPro
   useEffect(() => {
     if (!effectiveUserId) return
     
-    fetchDashboardData(effectiveUserId)
+    // Function declarations are hoisted; defer the stateful fetch until after the effect.
+    // eslint-disable-next-line react-hooks/immutability
+    queueMicrotask(() => void fetchDashboardData(effectiveUserId))
   }, [effectiveUserId])
 
-  const fetchDashboardData = async (targetUserId: string) => {
+  async function fetchDashboardData(targetUserId: string) {
     setLoading(true)
     try {
       const response = await fetch(`/api/dashboard?role=inquilino&userId=${targetUserId}`)

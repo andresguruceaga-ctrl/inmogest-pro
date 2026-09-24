@@ -165,10 +165,10 @@ export default function PropietariosPage() {
   })
 
   useEffect(() => {
-    fetchOwners()
+    queueMicrotask(() => void fetchOwners())
   }, [])
 
-  const fetchOwners = async () => {
+  async function fetchOwners() {
     try {
       const response = await fetch('/api/users?role=PROPIETARIO')
       if (response.ok) {

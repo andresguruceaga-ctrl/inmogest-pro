@@ -209,11 +209,13 @@ export default function PropiedadesPage() {
   const [editMainPhotoIndex, setEditMainPhotoIndex] = useState<number | null>(null)
 
   useEffect(() => {
-    fetchProperties()
-    fetchUsers()
+    queueMicrotask(() => {
+      void fetchProperties()
+      void fetchUsers()
+    })
   }, [])
 
-  const fetchProperties = async () => {
+  async function fetchProperties() {
     try {
       const response = await fetch('/api/properties')
       if (response.ok) {
@@ -227,7 +229,7 @@ export default function PropiedadesPage() {
     }
   }
 
-  const fetchUsers = async () => {
+  async function fetchUsers() {
     try {
       const response = await fetch('/api/users')
       if (response.ok) {

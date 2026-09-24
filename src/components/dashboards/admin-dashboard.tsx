@@ -165,10 +165,12 @@ export function AdminDashboard() {
   const [activities, setActivities] = useState<Activity[]>([])
 
   useEffect(() => {
-    fetchDashboardData()
+    // Function declarations are hoisted; defer the stateful fetch until after the effect.
+    // eslint-disable-next-line react-hooks/immutability
+    queueMicrotask(() => void fetchDashboardData())
   }, [])
 
-  const fetchDashboardData = async () => {
+  async function fetchDashboardData() {
     setLoading(true)
     try {
       const response = await fetch('/api/dashboard?role=admin')

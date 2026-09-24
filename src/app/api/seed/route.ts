@@ -1,9 +1,27 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hash } from 'bcryptjs';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+
+  if (session?.user.role !== 'ADMIN') {
+    return NextResponse.json(
+      { success: false, error: 'Acceso restringido a administradores' },
+      { status: 403 }
+    );
+  }
+
+  return null;
+}
 
 // GET - Crear datos de demostración (si no existen) y mostrar estado
 export async function GET() {
+  const forbidden = await requireAdmin();
+  if (forbidden) return forbidden;
+
   try {
     // Verificar si ya hay datos
     const existingUsers = await db.user.count();

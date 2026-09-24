@@ -286,18 +286,20 @@ export default function ReportesPage() {
   // Fetch report when filters change (only after initialization)
   useEffect(() => {
     if (isInitialized) {
-      fetchReport()
+      queueMicrotask(() => void fetchReport())
     }
   }, [period, selectedMonth, selectedYear, selectedOwnerId, selectedPropertyId, isInitialized])
 
   // Reset property selection when owner changes
   useEffect(() => {
-    if (selectedOwnerId !== null && selectedOwnerId !== 'all') {
-      fetchProperties(selectedOwnerId)
-    } else if (selectedOwnerId === 'all') {
-      fetchProperties()
-    }
-    setSelectedPropertyId('all')
+    queueMicrotask(() => {
+      if (selectedOwnerId !== null && selectedOwnerId !== 'all') {
+        void fetchProperties(selectedOwnerId)
+      } else if (selectedOwnerId === 'all') {
+        void fetchProperties()
+      }
+      setSelectedPropertyId('all')
+    })
   }, [selectedOwnerId])
 
   const togglePropertyExpand = (propertyId: string) => {

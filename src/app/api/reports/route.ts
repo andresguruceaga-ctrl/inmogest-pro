@@ -189,7 +189,8 @@ export async function GET(request: NextRequest) {
       })),
       totals: {
         pending: pendingExpenses.reduce((sum, e) => sum + e.amount, 0),
-        payments: ownerPayments.reduce((sum, p) => sum + p.amount, 0)
+        payments: ownerPayments.reduce((sum, p) => sum + p.amount, 0),
+        balance: 0,
       }
     }
     ownerBalanceData.totals.balance = ownerBalanceData.totals.payments - ownerBalanceData.totals.pending
@@ -237,7 +238,7 @@ export async function GET(request: NextRequest) {
           startDate: activeContract.startDate.toISOString(),
           endDate: activeContract.endDate.toISOString(),
           monthlyAmount: activeContract.monthlyAmount,
-          deposit: activeContract.deposit,
+          deposit: activeContract.depositAmount || 0,
           status: activeContract.status
         } : null,
         expensesDetails: {
@@ -281,7 +282,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Datos mensuales (para reporte anual)
-    let monthlyData = undefined
+    let monthlyData: Array<{
+      month: number
+      monthName: string
+      grossIncome: number
+      fixedExpenses: number
+      variableExpenses: number
+      totalExpenses: number
+      netIncome: number
+    }> | undefined
     if (period === 'yearly') {
       monthlyData = []
       for (let m = 1; m <= 12; m++) {
@@ -321,7 +330,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Comparación con período anterior
-    let comparison = undefined
+    let comparison: {
+      previousPeriod: {
+        month?: number
+        year: number
+        totals: { grossIncome: number; netIncome: number; totalExpenses: number }
+      }
+      variations: { grossIncome: number; netIncome: number; totalExpenses: number }
+    } | undefined
     let previousStart: Date
     let previousEnd: Date
 

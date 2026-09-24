@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
+import { normalizeExpenseAmounts, sumExpenseAmounts } from '@/lib/finance';
 
 // Esquema de validación para crear gasto
 const createExpenseSchema = z.object({
@@ -92,10 +93,9 @@ export async function GET(request: NextRequest) {
     // registros historicos con totalAmount inflado alteren los resumenes.
     const normalizedExpenses = expenses.map(expense => ({
       ...expense,
-      itbmsAmount: 0,
-      totalAmount: expense.amount,
+      ...normalizeExpenseAmounts(expense.amount),
     }));
-    const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const totalExpenses = sumExpenseAmounts(expenses);
 
     // Calcular balance de gastos administrados
     const adminPaidExpenses = expenses.filter(e => e.paidByAdmin);
@@ -198,9 +198,7 @@ export async function POST(request: NextRequest) {
         description: validatedData.description ?? null,
         category: validatedData.category as any,
         expenseType: validatedData.expenseType as any,
-        amount: validatedData.amount,
-        itbmsAmount: 0,
-        totalAmount: validatedData.amount,
+        ...normalizeExpenseAmounts(validatedData.amount),
         invoiceNumber: validatedData.invoiceNumber ?? null,
         invoiceDate: validatedData.invoiceDate ? new Date(validatedData.invoiceDate) : null,
         supplier: validatedData.supplier ?? null,

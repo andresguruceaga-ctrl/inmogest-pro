@@ -130,10 +130,10 @@ export default function ContratosPage() {
   }, [editFormData.tenantId, tenants])
 
   useEffect(() => {
-    fetchData()
+    queueMicrotask(() => void fetchData())
   }, [])
 
-  const fetchData = async () => {
+  async function fetchData() {
     try {
       const [contractsRes, propertiesRes, tenantsRes] = await Promise.all([
         fetch('/api/contracts'),
@@ -527,30 +527,34 @@ export default function ContratosPage() {
     }
   }
 
-  const handleDownloadPDF = (contract: Contract) => {
+  const handleDownloadPDF = async (contract: Contract) => {
     try {
-      const doc = generateContractPDF({
-        contractNumber: contract.contractNumber || 'N/A',
-        property: {
-          title: contract.property?.title || 'N/A',
-          address: contract.property?.address || 'N/A',
-          province: ''
+      const doc = await generateContractPDF({
+        contract: {
+          id: contract.id,
+          property: {
+            name: contract.property?.title || 'N/A',
+            address: contract.property?.address || 'N/A',
+          },
+          owner: contract.owner ? {
+            name: contract.owner.name || 'N/A',
+            email: contract.owner.email || '',
+            phone: contract.owner.phone,
+          } : undefined,
+          tenant: contract.tenant ? {
+            name: contract.tenant.name || 'N/A',
+            email: contract.tenant.email || '',
+            phone: contract.tenant.phone,
+          } : {
+            name: 'Sin inquilino',
+            email: '',
+          },
+          startDate: contract.startDate,
+          endDate: contract.endDate,
+          monthlyRent: contract.monthlyAmount ?? 0,
+          deposit: contract.depositAmount ?? 0,
+          status: contract.status,
         },
-        owner: {
-          name: contract.owner?.name || 'N/A',
-          email: contract.owner?.email || ''
-        },
-        tenant: contract.tenant ? {
-          name: contract.tenant.name || 'N/A',
-          email: contract.tenant.email || ''
-        } : {
-          name: 'Sin inquilino',
-          email: ''
-        },
-        startDate: new Date(contract.startDate),
-        endDate: new Date(contract.endDate),
-        monthlyRent: contract.monthlyAmount ?? 0,
-        depositAmount: contract.depositAmount ?? undefined
       })
 
       doc.save(`contrato_${contract.contractNumber || 'download'}.pdf`)

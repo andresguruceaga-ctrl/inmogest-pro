@@ -138,10 +138,10 @@ export default function RelacionGastosPage() {
   })
 
   useEffect(() => {
-    fetchData()
+    queueMicrotask(() => void fetchData())
   }, [])
 
-  const fetchData = async () => {
+  async function fetchData() {
     try {
       const response = await fetch('/api/owner-balance')
       const result = await response.json()

@@ -25,37 +25,40 @@ Los calculos de pagos y alquileres no se cambiaron; esta correccion se limita a 
 - Compilacion de produccion con Next.js: correcta (48 rutas generadas).
 - Revision de referencias: no quedan calculos de gastos basados en `expense.totalAmount` dentro de la aplicacion principal.
 
-## Hallazgos pendientes, por prioridad
+## Segunda fase completada
 
-### 1. Rutas de escritura sin proteccion (critico)
+### Rutas de mantenimiento y prueba
 
-Las siguientes rutas pueden modificar datos o infraestructura sin comprobar una sesion de administrador:
+- `/api/debug-triggers` y `/api/test-expense-create` fueron retiradas.
+- `/api/seed` y `/api/setup-storage` exigen una sesion con rol `ADMIN`.
+- Las familias de API heredadas sin consumidores ni modelo Prisma fueron retiradas.
 
-- `GET /api/seed` crea usuarios y datos de demostracion.
-- `GET /api/test-expense-create` crea un gasto de prueba.
-- `POST /api/debug-triggers` crea gastos con datos sin validar.
-- `GET /api/setup-storage` puede crear un bucket publico en Supabase.
+### Pruebas financieras
 
-Tambien se debe revisar de forma sistematica la autorizacion de las rutas CRUD. La ruta de reportes si comprueba sesion, pero varias rutas de gastos y propiedades no lo hacen.
+- Se extrajo la regla financiera compartida a `src/lib/finance.ts`.
+- Las pruebas comprueban gastos sin ITBMS, registros historicos y utilidad neta.
+- Se ejecutan con `npm test` o `node --test tests/finance.test.mts`.
 
-### 2. TypeScript esta desactivado durante el build (alto)
+### TypeScript y Prisma
 
-`next.config.ts` contiene `typescript.ignoreBuildErrors: true`. Una comprobacion manual con `tsc --noEmit` encuentra multiples errores preexistentes, entre ellos rutas antiguas que consultan modelos (`owner`, `supplier`, `fixedCost`, `invoice`, `tenant` y `serviceRequest`) que no existen en el esquema Prisma actual.
+- Se retiraron rutas que apuntaban a modelos inexistentes (`owner`, `supplier`, `fixedCost`, `invoice`, `tenant` y `serviceRequest`).
+- Se corrigieron los contratos de tipos restantes, incluido el PDF de contratos y Zod 4.
+- `typescript.ignoreBuildErrors` fue eliminado de `next.config.ts`.
+- `tsc --noEmit` finaliza correctamente.
 
-La aplicacion compila porque esos errores se omiten, no porque el tipado este sano. Antes de activar la validacion estricta hay que decidir que modulos heredados se conservan y alinear sus modelos o retirarlos.
+### Lint por pantallas
 
-### 3. Deuda de lint de React (media)
+- Se corrigieron los efectos, cargadores y advertencias de accesibilidad.
+- ESLint completo finaliza sin errores ni advertencias.
 
-El analisis completo encuentra 27 errores y 3 avisos preexistentes, principalmente funciones declaradas despues de ser usadas en efectos y actualizaciones de estado dentro de efectos. La pantalla de gastos quedo corregida y verificada; las demas deben migrarse por modulo para reducir riesgo.
+## Hallazgos pendientes
 
-### 4. Falta de pruebas automatizadas (media)
+### Autorizacion CRUD (alta)
 
-No hay un script de pruebas. Conviene empezar con pruebas de reglas financieras (gastos sin ITBMS, pagos, reembolsos y reportes) antes de las optimizaciones visuales.
+La proteccion de mantenimiento ya esta resuelta. Aun conviene auditar de forma sistematica la autorizacion y el alcance por propietario/inquilino de todas las rutas CRUD.
 
 ## Orden recomendado para continuar
 
-1. Proteger o retirar las rutas de prueba, seed y configuracion.
-2. Añadir pruebas para gastos y reportes financieros.
-3. Alinear las rutas API heredadas con el esquema Prisma y volver a activar TypeScript en el build.
-4. Corregir el lint por pantallas.
-5. Iniciar la mejora visual y de experiencia de usuario sobre una base funcional estable.
+1. Auditar autorizacion y aislamiento de datos en todas las rutas CRUD.
+2. Ampliar las pruebas a handlers HTTP y permisos por rol.
+3. Iniciar la mejora visual y de experiencia de usuario sobre una base funcional estable.

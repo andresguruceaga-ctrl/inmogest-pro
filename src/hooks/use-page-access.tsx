@@ -19,7 +19,7 @@ interface PageAccessResult {
 export function usePageAccess(options: UsePageAccessOptions): PageAccessResult {
   const { pageId, redirectPath = '/' } = options
   const router = useRouter()
-  const { user, canEdit, isReadOnly } = useAppStore()
+  const { user } = useAppStore()
   
   const navItem = NAV_ITEMS.find(item => 
     item.id === pageId || 
@@ -28,8 +28,8 @@ export function usePageAccess(options: UsePageAccessOptions): PageAccessResult {
   )
   
   const hasAccess = user && navItem ? navItem.roles.includes(user.role) : false
-  const userCanEdit = canEdit(pageId)
-  const userIsReadOnly = isReadOnly(pageId)
+  const userCanEdit = Boolean(hasAccess && user?.role === 'admin')
+  const userIsReadOnly = Boolean(hasAccess && !userCanEdit)
   
   useEffect(() => {
     if (!user) {

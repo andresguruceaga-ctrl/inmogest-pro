@@ -1,8 +1,26 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin, STORAGE_BUCKET } from '@/lib/supabase';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+
+  if (session?.user.role !== 'ADMIN') {
+    return NextResponse.json(
+      { success: false, error: 'Acceso restringido a administradores' },
+      { status: 403 }
+    );
+  }
+
+  return null;
+}
 
 // GET - Verificar y crear bucket de almacenamiento
 export async function GET() {
+  const forbidden = await requireAdmin();
+  if (forbidden) return forbidden;
+
   if (!supabaseAdmin) {
     return NextResponse.json(
       {
@@ -86,6 +104,9 @@ export async function GET() {
 
 // POST - Crear carpetas por defecto en el bucket
 export async function POST() {
+  const forbidden = await requireAdmin();
+  if (forbidden) return forbidden;
+
   if (!supabaseAdmin) {
     return NextResponse.json(
       {
@@ -98,7 +119,7 @@ export async function POST() {
 
   try {
     const folders = ['properties', 'documents', 'receipts', 'tickets', 'uploads'];
-    const results = [];
+    const results: Array<{ folder: string; success: boolean; error?: string }> = [];
 
     for (const folder of folders) {
       // Crear un archivo .keep en cada carpeta para asegurar que exista

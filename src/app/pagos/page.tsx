@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CreditCard, Plus, ArrowUpRight, ArrowDownRight, Loader2, Upload, FileText, Image, Eye, Calendar, Building2, X, Check, MoreHorizontal, Edit, Trash2 } from 'lucide-react'
+import { CreditCard, Plus, ArrowUpRight, ArrowDownRight, Loader2, Upload, FileText, ImageIcon, Eye, Calendar, Building2, X, Check, MoreHorizontal, Edit, Trash2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
@@ -123,10 +123,10 @@ export default function PagosPage() {
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
 
   useEffect(() => {
-    fetchData()
+    queueMicrotask(() => void fetchData())
   }, [])
 
-  const fetchData = async () => {
+  async function fetchData() {
     try {
       const [paymentsRes, propertiesRes, tenantsRes] = await Promise.all([
         fetch('/api/payments'),
@@ -756,7 +756,7 @@ export default function PagosPage() {
                       {formData.receiptImage.endsWith('.pdf') ? (
                         <FileText className="h-8 w-8 text-red-500" />
                       ) : (
-                        <Image className="h-8 w-8 text-primary" />
+                        <ImageIcon className="h-8 w-8 text-primary" />
                       )}
                       <div>
                         <p className="font-medium text-sm">{formData.receiptFileName}</p>
@@ -952,7 +952,7 @@ export default function PagosPage() {
                       {editFormData.receiptImage.endsWith('.pdf') ? (
                         <FileText className="h-8 w-8 text-red-500" />
                       ) : (
-                        <Image className="h-8 w-8 text-primary" />
+                        <ImageIcon className="h-8 w-8 text-primary" />
                       )}
                       <div>
                         <p className="font-medium text-sm">{editFormData.receiptFileName || 'Comprobante'}</p>
