@@ -121,10 +121,6 @@ export default function GastosPage() {
     return exists ? editFormData.propertyId : ''
   }, [editFormData.propertyId, properties])
 
-  useEffect(() => {
-    fetchData()
-  }, [])
-
   const fetchData = async () => {
     try {
       const [expensesRes, propertiesRes] = await Promise.all([
@@ -149,6 +145,12 @@ export default function GastosPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    // fetchData only updates state after its requests resolve.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchData()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

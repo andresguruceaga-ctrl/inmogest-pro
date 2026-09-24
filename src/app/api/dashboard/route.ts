@@ -368,13 +368,13 @@ export async function GET(request: NextRequest) {
           propertyId: { in: propertyIds },
           expenseDate: { gte: startOfMonth, lte: endOfMonth },
         },
-        select: { totalAmount: true, itbmsAmount: true, expenseType: true, category: true },
+        select: { amount: true, expenseType: true, category: true },
       });
 
-      const totalExpenses = monthExpenses.reduce((sum, e) => sum + e.totalAmount, 0);
-      const fixedExpenses = monthExpenses.filter(e => e.expenseType === 'FIJO').reduce((sum, e) => sum + e.totalAmount, 0);
-      const variableExpenses = monthExpenses.filter(e => e.expenseType === 'VARIABLE').reduce((sum, e) => sum + e.totalAmount, 0);
-      const expensesItbms = monthExpenses.reduce((sum, e) => sum + e.itbmsAmount, 0);
+      const totalExpenses = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+      const fixedExpenses = monthExpenses.filter(e => e.expenseType === 'FIJO').reduce((sum, e) => sum + e.amount, 0);
+      const variableExpenses = monthExpenses.filter(e => e.expenseType === 'VARIABLE').reduce((sum, e) => sum + e.amount, 0);
+      const expensesItbms = 0;
 
       // Neto
       const netIncome = monthIncome - totalExpenses;
@@ -424,7 +424,7 @@ export async function GET(request: NextRequest) {
           id: e.id,
           type: 'expense',
           description: `${e.title} - ${e.property?.title || 'N/A'}`,
-          amount: -e.totalAmount,
+          amount: -e.amount,
           date: formatDate(e.expenseDate),
         });
       });
@@ -433,7 +433,7 @@ export async function GET(request: NextRequest) {
       const expensesByCategory: Record<string, number> = {};
       monthExpenses.forEach(e => {
         const cat = e.category;
-        expensesByCategory[cat] = (expensesByCategory[cat] || 0) + e.totalAmount;
+        expensesByCategory[cat] = (expensesByCategory[cat] || 0) + e.amount;
       });
 
       // Contratos próximos a vencer

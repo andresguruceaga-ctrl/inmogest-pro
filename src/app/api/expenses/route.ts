@@ -88,17 +88,23 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Calcular totales
-    const totalExpenses = expenses.reduce((sum, expense) => sum + expense.totalAmount, 0);
+    // Los gastos nunca incluyen ITBMS. Usar siempre el importe base evita que
+    // registros historicos con totalAmount inflado alteren los resumenes.
+    const normalizedExpenses = expenses.map(expense => ({
+      ...expense,
+      itbmsAmount: 0,
+      totalAmount: expense.amount,
+    }));
+    const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
     // Calcular balance de gastos administrados
     const adminPaidExpenses = expenses.filter(e => e.paidByAdmin);
     const pendingReimbursement = adminPaidExpenses
       .filter(e => !e.reimbursedByOwner)
-      .reduce((sum, e) => sum + e.totalAmount, 0);
+      .reduce((sum, e) => sum + e.amount, 0);
     const totalReimbursed = adminPaidExpenses
       .filter(e => e.reimbursedByOwner)
-      .reduce((sum, e) => sum + e.totalAmount, 0);
+      .reduce((sum, e) => sum + e.amount, 0);
 
     // Agrupar por categoría
     const byCategory = expenses.reduce((acc, expense) => {
@@ -110,7 +116,7 @@ export async function GET(request: NextRequest) {
         };
       }
       acc[cat].count++;
-      acc[cat].total += expense.totalAmount;
+      acc[cat].total += expense.amount;
       return acc;
     }, {} as Record<string, { count: number; total: number }>);
 
@@ -120,26 +126,26 @@ export async function GET(request: NextRequest) {
         count: expenses.filter(e => e.expenseType === 'FIJO').length,
         total: expenses
           .filter(e => e.expenseType === 'FIJO')
-          .reduce((sum, e) => sum + e.totalAmount, 0),
+          .reduce((sum, e) => sum + e.amount, 0),
       },
       VARIABLE: {
         count: expenses.filter(e => e.expenseType === 'VARIABLE').length,
         total: expenses
           .filter(e => e.expenseType === 'VARIABLE')
-          .reduce((sum, e) => sum + e.totalAmount, 0),
+          .reduce((sum, e) => sum + e.amount, 0),
       },
     };
 
     return NextResponse.json({
       success: true,
-      data: expenses,
+      data: normalizedExpenses,
       count: expenses.length,
       summary: {
         totalExpenses,
         byCategory,
         byType,
         adminBalance: {
-          totalAdminPaid: adminPaidExpenses.reduce((sum, e) => sum + e.totalAmount, 0),
+          totalAdminPaid: adminPaidExpenses.reduce((sum, e) => sum + e.amount, 0),
           pendingReimbursement,
           totalReimbursed,
         },
@@ -231,12 +237,12 @@ export async function POST(request: NextRequest) {
     console.error('Error al crear gasto:', error);
 
     if (error instanceof z.ZodError) {
-      console.log('Zod validation errors:', JSON.stringify(error.errors, null, 2));
+      console.log('Zod validation errors:', JSON.stringify(error.issues, null, 2));
       return NextResponse.json(
         {
           success: false,
           error: 'Datos de entrada inválidos',
-          details: error.errors.map(e => ({
+          details: error.issues.map(e => ({
             field: e.path.join('.'),
             message: e.message
           })),

@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
 
-// ITBMS rate for Panama (7%)
-const ITBMS_RATE = 7.0;
-
 // Esquema de validación para actualizar gasto
 const updateExpenseSchema = z.object({
   title: z.string().min(1, 'El título es requerido').optional(),
@@ -12,7 +9,6 @@ const updateExpenseSchema = z.object({
   category: z.string().optional(),
   expenseType: z.string().optional(),
   amount: z.number().min(0, 'El monto debe ser válido').optional(),
-  includeItbms: z.boolean().optional(),
   invoiceNumber: z.string().optional().nullable(),
   invoiceDate: z.string().optional().nullable(),
   supplier: z.string().optional().nullable(),
@@ -139,20 +135,14 @@ export async function PUT(
     if (validatedData.expenseType) {
       updateData.expenseType = validatedData.expenseType;
     }
+    const expenseAmount = validatedData.amount ?? existingExpense.amount;
     if (validatedData.amount !== undefined) {
-      const includeItbms = validatedData.includeItbms ?? true;
-      const itbmsAmount = includeItbms ? validatedData.amount * (ITBMS_RATE / 100) : 0;
       updateData.amount = validatedData.amount;
-      updateData.itbmsAmount = itbmsAmount;
-      updateData.totalAmount = validatedData.amount + itbmsAmount;
-    } else if (validatedData.includeItbms !== undefined) {
-      // Si solo se cambia includeItbms, recalcular con el monto existente
-      const itbmsAmount = validatedData.includeItbms
-        ? existingExpense.amount * (ITBMS_RATE / 100)
-        : 0;
-      updateData.itbmsAmount = itbmsAmount;
-      updateData.totalAmount = existingExpense.amount + itbmsAmount;
     }
+    // Los gastos nunca llevan ITBMS. Tambien sanea registros antiguos al editar
+    // cualquier campo, aunque el importe no haya cambiado.
+    updateData.itbmsAmount = 0;
+    updateData.totalAmount = expenseAmount;
     if (validatedData.invoiceNumber !== undefined) {
       updateData.invoiceNumber = validatedData.invoiceNumber;
     }
@@ -213,12 +203,12 @@ export async function PUT(
     console.error('Error al actualizar gasto:', error);
 
     if (error instanceof z.ZodError) {
-      console.log('Zod validation errors:', JSON.stringify(error.errors, null, 2));
+      console.log('Zod validation errors:', JSON.stringify(error.issues, null, 2));
       return NextResponse.json(
         {
           success: false,
           error: 'Datos de entrada inválidos',
-          details: error.errors.map(e => ({
+          details: error.issues.map(e => ({
             field: e.path.join('.'),
             message: e.message
           })),

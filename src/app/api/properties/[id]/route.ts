@@ -154,7 +154,7 @@ export async function GET(
 
     // Calcular totales de gastos
     const totalExpenses = property.expenses.reduce(
-      (sum, expense) => sum + expense.totalAmount,
+      (sum, expense) => sum + expense.amount,
       0
     );
 

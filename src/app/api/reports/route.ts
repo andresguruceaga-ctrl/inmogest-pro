@@ -202,8 +202,8 @@ export async function GET(request: NextRequest) {
       const fixedExpensesList = propertyExpenses.filter(e => e.expenseType === 'FIJO')
       const variableExpensesList = propertyExpenses.filter(e => e.expenseType === 'VARIABLE')
 
-      const fixedExpenses = fixedExpensesList.reduce((sum, e) => sum + e.totalAmount, 0)
-      const variableExpenses = variableExpensesList.reduce((sum, e) => sum + e.totalAmount, 0)
+      const fixedExpenses = fixedExpensesList.reduce((sum, e) => sum + e.amount, 0)
+      const variableExpenses = variableExpensesList.reduce((sum, e) => sum + e.amount, 0)
       const grossIncome = propertyPayments.reduce((sum, p) => sum + p.totalAmount, 0)
       const monthlyRent = property.contracts[0]?.monthlyAmount || 0
 
@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
         totalExpenses: fixedExpenses + variableExpenses,
         netIncome: grossIncome - fixedExpenses - variableExpenses,
         itbmsCollected: propertyPayments.reduce((sum, p) => sum + (p.itbmsAmount || 0), 0),
-        itbmsPaid: propertyExpenses.reduce((sum, e) => sum + (e.itbmsAmount || 0), 0),
+        itbmsPaid: 0,
         occupancyRate: property.contracts.length > 0 ? 100 : 0,
         paymentsCount: propertyPayments.length,
         expensesCount: propertyExpenses.length,
@@ -244,14 +244,14 @@ export async function GET(request: NextRequest) {
           fixed: fixedExpensesList.map(e => ({
             id: e.id,
             description: e.description || e.title,
-            amount: e.totalAmount,
+            amount: e.amount,
             date: e.expenseDate.toISOString(),
             category: e.category
           })),
           variable: variableExpensesList.map(e => ({
             id: e.id,
             description: e.description || e.title,
-            amount: e.totalAmount,
+            amount: e.amount,
             date: e.expenseDate.toISOString(),
             category: e.category
           }))
@@ -293,7 +293,7 @@ export async function GET(request: NextRequest) {
             propertyId: { in: propertyIds },
             expenseDate: { gte: monthStart, lte: monthEnd }
           },
-          _sum: { totalAmount: true }
+          _sum: { amount: true }
         })
         
         const monthPayments = await prisma.payment.aggregate({
@@ -306,7 +306,7 @@ export async function GET(request: NextRequest) {
         })
 
         const monthGross = monthPayments._sum.totalAmount || 0
-        const monthExpensesTotal = monthExpenses._sum.totalAmount || 0
+        const monthExpensesTotal = monthExpenses._sum.amount || 0
 
         monthlyData.push({
           month: m,
@@ -338,7 +338,7 @@ export async function GET(request: NextRequest) {
         propertyId: { in: propertyIds },
         expenseDate: { gte: previousStart, lte: previousEnd }
       },
-      _sum: { totalAmount: true }
+      _sum: { amount: true }
     })
 
     const prevPayments = await prisma.payment.aggregate({
@@ -351,7 +351,7 @@ export async function GET(request: NextRequest) {
     })
 
     const prevGross = prevPayments._sum.totalAmount || 0
-    const prevExpensesTotal = prevExpenses._sum.totalAmount || 0
+    const prevExpensesTotal = prevExpenses._sum.amount || 0
     const prevNet = prevGross - prevExpensesTotal
 
     comparison = {
