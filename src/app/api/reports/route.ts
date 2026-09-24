@@ -195,7 +195,7 @@ export async function GET(request: NextRequest) {
     const propertiesData = properties.map(property => {
       const propertyExpenses = expenses.filter(e => e.propertyId === property.id)
       const propertyPayments = payments.filter(p => p.propertyId === property.id)
-      
+
       const fixedExpensesList = propertyExpenses.filter(e => e.expenseType === 'FIJO')
       const variableExpensesList = propertyExpenses.filter(e => e.expenseType === 'VARIABLE')
 
@@ -205,7 +205,7 @@ export async function GET(request: NextRequest) {
       const monthlyRent = property.contracts[0]?.monthlyAmount || 0
 
       const activeContract = property.contracts[0]
-      
+
       return {
         propertyId: property.id,
         propertyTitle: property.title,
@@ -292,7 +292,7 @@ export async function GET(request: NextRequest) {
       for (let m = 1; m <= 12; m++) {
         const monthStart = startOfMonth(new Date(year, m - 1, 1))
         const monthEnd = endOfMonth(new Date(year, m - 1, 1))
-        
+
         const monthExpenses = await prisma.expense.aggregate({
           where: {
             propertyId: { in: propertyIds },
@@ -300,7 +300,7 @@ export async function GET(request: NextRequest) {
           },
           _sum: { amount: true }
         })
-        
+
         const monthPayments = await prisma.payment.aggregate({
           where: {
             status: 'PAGADO',
