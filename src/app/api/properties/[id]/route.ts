@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
+import { requireApiUser } from '@/lib/api-auth';
+import { canAccessProperty } from '@/lib/authorization';
 
 // Esquema de validación para actualizar propiedad
 const updatePropertySchema = z.object({
@@ -51,6 +53,9 @@ export async function GET(
   let prisma;
   
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
 
@@ -148,18 +153,34 @@ export async function GET(
       );
     }
 
+    if (!canAccessProperty(auth.user, property)) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 403 });
+    }
+
+    const isTenant = auth.user.role === 'INQUILINO';
+    const visibleExpenses = isTenant ? [] : property.expenses;
+    const visiblePayments = isTenant
+      ? property.payments.filter(payment => payment.userId === auth.user.id)
+      : property.payments;
+    const visibleTickets = isTenant
+      ? property.supportTickets.filter(ticket => ticket.userId === auth.user.id)
+      : property.supportTickets;
+    const visibleContracts = isTenant
+      ? property.contracts.filter(contract => contract.tenantId === auth.user.id)
+      : property.contracts;
+
     // Calcular ITBMS y totales
     const itbmsAmount = property.monthlyRent * (property.itbmsRate / 100);
     const totalRentWithITBMS = property.monthlyRent + itbmsAmount;
 
     // Calcular totales de gastos
-    const totalExpenses = property.expenses.reduce(
+    const totalExpenses = visibleExpenses.reduce(
       (sum, expense) => sum + expense.amount,
       0
     );
 
     // Calcular pagos pendientes
-    const pendingPayments = property.payments.filter(
+    const pendingPayments = visiblePayments.filter(
       payment => payment.status === 'PENDIENTE' || payment.status === 'ATRASADO'
     );
     const totalPending = pendingPayments.reduce(
@@ -171,16 +192,21 @@ export async function GET(
       success: true,
       data: {
         ...property,
+        expenses: visibleExpenses,
+        payments: visiblePayments,
+        supportTickets: visibleTickets,
+        contracts: visibleContracts,
+        financialReports: isTenant ? [] : property.financialReports,
         itbmsAmount,
         totalRentWithITBMS,
         summary: {
           totalExpenses,
           totalPendingPayments: totalPending,
           pendingPaymentsCount: pendingPayments.length,
-          openTicketsCount: property.supportTickets.filter(
+          openTicketsCount: visibleTickets.filter(
             t => t.status === 'ABIERTO' || t.status === 'EN_PROCESO'
           ).length,
-          activeContractsCount: property.contracts.filter(
+          activeContractsCount: visibleContracts.filter(
             c => c.status === 'VIGENTE'
           ).length,
         },
@@ -207,6 +233,9 @@ export async function PUT(
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
     const body = await request.json();
@@ -358,6 +387,9 @@ export async function DELETE(
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
 

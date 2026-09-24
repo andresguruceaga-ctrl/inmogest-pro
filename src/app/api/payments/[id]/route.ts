@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
+import { requireApiUser } from '@/lib/api-auth';
 
 // Esquema de validación para actualizar pago
 const updatePaymentSchema = z.object({
@@ -25,6 +26,9 @@ export async function GET(
   const prisma = getPrismaClient();
   
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     const { id } = await params;
     
     const payment = await prisma.payment.findUnique({
@@ -36,6 +40,7 @@ export async function GET(
             title: true,
             address: true,
             province: true,
+            ownerId: true,
           },
         },
         user: {
@@ -63,6 +68,14 @@ export async function GET(
       );
     }
 
+    if (
+      auth.user.role !== 'ADMIN' &&
+      !(auth.user.role === 'PROPIETARIO' && payment.property.ownerId === auth.user.id) &&
+      !(auth.user.role === 'INQUILINO' && payment.userId === auth.user.id)
+    ) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 403 });
+    }
+
     return NextResponse.json({ success: true, data: payment });
   } catch (error) {
     console.error('Error al obtener pago:', error);
@@ -81,6 +94,9 @@ export async function PUT(
   const prisma = getPrismaClient();
   
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     const { id } = await params;
     const body = await request.json();
 
@@ -227,6 +243,9 @@ export async function DELETE(
   const prisma = getPrismaClient();
   
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     const { id } = await params;
 
     // Verificar que el pago existe

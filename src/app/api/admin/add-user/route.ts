@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import bcrypt from 'bcryptjs'
+import { requireApiUser } from '@/lib/api-auth'
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireApiUser(['ADMIN'])
+    if (!auth.ok) return auth.response
+
     const body = await request.json()
     const { name, email, phone, password, role } = body
 

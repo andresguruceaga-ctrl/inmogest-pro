@@ -51,14 +51,24 @@ Los calculos de pagos y alquileres no se cambiaron; esta correccion se limita a 
 - Se corrigieron los efectos, cargadores y advertencias de accesibilidad.
 - ESLint completo finaliza sin errores ni advertencias.
 
-## Hallazgos pendientes
+## Tercera fase completada
 
-### Autorizacion CRUD (alta)
+### Autorizacion y aislamiento CRUD
 
-La proteccion de mantenimiento ya esta resuelta. Aun conviene auditar de forma sistematica la autorizacion y el alcance por propietario/inquilino de todas las rutas CRUD.
+- Todas las rutas CRUD exigen sesion; solo login, registro de inquilinos y el estado basico de la API permanecen publicos.
+- Los filtros de propietario e inquilino se obtienen de la sesion y no de parametros `role` o `userId` controlados por el navegador.
+- Propiedades, contratos, gastos, pagos, tickets, documentos, reportes y pagos a propietarios aplican aislamiento por relacion Prisma.
+- Las mutaciones financieras y administrativas quedan restringidas al rol `ADMIN`.
+- El registro publico solo permite crear cuentas `INQUILINO`; las cuentas privilegiadas se crean desde rutas administrativas.
 
-## Orden recomendado para continuar
+### Pruebas HTTP y roles
 
-1. Auditar autorizacion y aislamiento de datos en todas las rutas CRUD.
-2. Ampliar las pruebas a handlers HTTP y permisos por rol.
-3. Iniciar la mejora visual y de experiencia de usuario sobre una base funcional estable.
+- Se añadieron funciones puras para probar el alcance de propiedades, usuarios y datos financieros.
+- El guard HTTP comprueba respuestas `401` y `403`.
+- Un handler protegido se prueba con solicitudes reales de Web API y confirma que la logica CRUD no se ejecuta para roles insuficientes.
+
+### Informes imprimibles
+
+- La pantalla adopta la estructura visual de los informes de referencia: cabecera verde azulado, sello de periodo, tarjetas KPI y paneles blancos.
+- Se añadió impresion nativa con formato A4 horizontal y opcion de guardar como PDF.
+- Los controles, la barra lateral, la cabecera de aplicacion y el pie se ocultan al imprimir.

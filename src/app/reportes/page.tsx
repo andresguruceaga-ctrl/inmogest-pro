@@ -15,7 +15,7 @@ import {
   Download, TrendingUp, TrendingDown, DollarSign, Receipt, BarChart3, 
   Building2, Calendar, ChevronDown, ChevronUp, Loader2, FileText,
   ArrowUpRight, ArrowDownRight, Eye, AlertCircle, ChevronRight, Sparkles,
-  HelpCircle, Clock, CheckCircle, AlertTriangle
+  HelpCircle, Clock, CheckCircle, AlertTriangle, Printer
 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
@@ -490,26 +490,53 @@ const handleDownloadPDF = () => {
 
   return (
     <SidebarProvider>
-      <Sidebar />
+      <div className="no-print">
+        <Sidebar />
+      </div>
       <SidebarInset className="flex flex-col min-h-screen">
-        <Header />
+        <div className="no-print">
+          <Header />
+        </div>
         
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
+        <main className="report-print-root flex-1 bg-[#f5f7fa] p-4 md:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <section className="report-hero overflow-hidden rounded-[20px] bg-gradient-to-br from-[#123b4a] via-[#126b73] to-[#18a29b] p-6 text-white shadow-lg md:p-8">
+              <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Reportes Financieros</h1>
-                <p className="text-muted-foreground">Análisis detallado de ingresos y gastos</p>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-cyan-100">
+                    Reporte financiero · Administración
+                  </p>
+                  <h1 className="text-2xl font-bold tracking-tight md:text-4xl">
+                    {selectedPropertyId === 'all'
+                      ? 'Portafolio de propiedades'
+                      : properties.find((property) => property.id === selectedPropertyId)?.title || 'Reporte de propiedad'}
+                  </h1>
+                  <p className="mt-2 max-w-2xl text-sm text-cyan-50/90 md:text-base">
+                    Ingresos, gastos, rendimiento y actividad operativa en un solo informe.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/20 bg-white/10 px-5 py-4 text-left backdrop-blur-sm md:text-right">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-cyan-100">Período</p>
+                  <p className="mt-1 text-lg font-bold">
+                    {period === 'monthly' ? `${months.find((item) => item.value === selectedMonth)?.label} ${selectedYear}` : `Año ${selectedYear}`}
+                  </p>
+                </div>
               </div>
-              <Button variant="outline" onClick={handleDownloadPDF} disabled={!reportData || loading}>
-                <Download className="h-4 w-4 mr-2" />
-                Descargar PDF
-              </Button>
-            </div>
+              <div className="no-print mt-6 flex flex-wrap gap-2">
+                <Button className="bg-white text-[#126b73] hover:bg-cyan-50" onClick={() => window.print()} disabled={!reportData || loading}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Imprimir / Guardar PDF
+                </Button>
+                <Button variant="outline" className="border-white/40 bg-transparent text-white hover:bg-white/10 hover:text-white" onClick={handleDownloadPDF} disabled={!reportData || loading}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Descargar PDF
+                </Button>
+              </div>
+            </section>
 
             {/* Filters */}
-            <Card>
+            <Card className="no-print rounded-2xl border-0 shadow-sm">
               <CardHeader>
                 <CardTitle className="text-base">Filtros</CardTitle>
               </CardHeader>
@@ -600,7 +627,7 @@ const handleDownloadPDF = () => {
 
             {/* Admin Summary - Only visible for admins */}
             {isAdmin && (
-              <Card>
+              <Card className="rounded-2xl border-0 shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <FileText className="h-4 w-4" />
@@ -653,8 +680,8 @@ const handleDownloadPDF = () => {
             ) : reportData ? (
               <>
                 {/* Summary Cards */}
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <Card>
+                <div className="report-kpis grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <Card className="rounded-2xl border-l-4 border-l-[#19a59d] shadow-sm">
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -674,7 +701,7 @@ const handleDownloadPDF = () => {
                     </CardContent>
                   </Card>
 
-                  <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setExpandedCostDetails(expandedCostDetails === 'fixed' ? null : 'fixed')}>
+                  <Card className="cursor-pointer rounded-2xl border-l-4 border-l-[#f0a33b] shadow-sm transition-shadow hover:shadow-md" onClick={() => setExpandedCostDetails(expandedCostDetails === 'fixed' ? null : 'fixed')}>
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -692,7 +719,7 @@ const handleDownloadPDF = () => {
                     </CardContent>
                   </Card>
 
-                  <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setExpandedCostDetails(expandedCostDetails === 'variable' ? null : 'variable')}>
+                  <Card className="cursor-pointer rounded-2xl border-l-4 border-l-[#ef6b62] shadow-sm transition-shadow hover:shadow-md" onClick={() => setExpandedCostDetails(expandedCostDetails === 'variable' ? null : 'variable')}>
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -710,7 +737,7 @@ const handleDownloadPDF = () => {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="rounded-2xl border-l-4 border-l-[#3578c8] shadow-sm">
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -1179,7 +1206,7 @@ const handleDownloadPDF = () => {
                       <div className="p-4 rounded-lg bg-red-500/5 border border-red-500/10">
                         <p className="text-sm text-muted-foreground">ITBMS Pagado</p>
                         <p className="text-xl font-bold text-red-500">{formatCurrency(reportData.totals.itbmsPaid)}</p>
-                        <p className="text-xs text-muted-foreground mt-1">En gastos</p>
+                        <p className="text-xs text-muted-foreground mt-1">Los gastos no incorporan ITBMS</p>
                       </div>
                       <div className="p-4 rounded-lg bg-primary/5 border border-primary/10">
                         <p className="text-sm text-muted-foreground">Balance ITBMS</p>
@@ -1201,7 +1228,9 @@ const handleDownloadPDF = () => {
           </div>
         </main>
         
-        <Footer />
+        <div className="no-print">
+          <Footer />
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

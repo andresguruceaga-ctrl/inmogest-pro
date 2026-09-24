@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
 import { normalizeExpenseAmounts } from '@/lib/finance';
+import { requireApiUser } from '@/lib/api-auth';
 
 // Esquema de validación para actualizar gasto
 const updateExpenseSchema = z.object({
@@ -29,6 +30,9 @@ export async function GET(
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN', 'PROPIETARIO']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
 
@@ -41,6 +45,7 @@ export async function GET(
             title: true,
             address: true,
             province: true,
+            ownerId: true,
           },
         },
       },
@@ -54,6 +59,10 @@ export async function GET(
         },
         { status: 404 }
       );
+    }
+
+    if (auth.user.role === 'PROPIETARIO' && expense.property.ownerId !== auth.user.id) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 403 });
     }
 
     return NextResponse.json({
@@ -81,6 +90,9 @@ export async function PUT(
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
     const body = await request.json();
@@ -239,6 +251,9 @@ export async function DELETE(
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
 

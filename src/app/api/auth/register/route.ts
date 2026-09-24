@@ -15,7 +15,7 @@ const registerSchema = z.object({
       'La contraseña debe contener al menos una mayúscula, una minúscula y un número'
     ),
   phone: z.string().optional(),
-  role: z.enum(['ADMIN', 'INQUILINO', 'PROPIETARIO']).default('INQUILINO'),
+  role: z.literal('INQUILINO').optional().default('INQUILINO'),
 })
 
 export async function POST(request: NextRequest) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
+import { requireApiUser } from '@/lib/api-auth';
+import { canAccessProperty } from '@/lib/authorization';
 
 // Esquema de validación para crear ticket
 const createTicketSchema = z.object({
@@ -19,6 +21,9 @@ export async function GET(request: NextRequest) {
   let prisma;
 
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get('propertyId');
@@ -30,11 +35,17 @@ export async function GET(request: NextRequest) {
     // Construir filtros dinámicos
     const where: Record<string, unknown> = {};
 
+    if (auth.user.role === 'PROPIETARIO') {
+      where.property = { ownerId: auth.user.id };
+    } else if (auth.user.role === 'INQUILINO') {
+      where.userId = auth.user.id;
+    }
+
     if (propertyId) {
       where.propertyId = propertyId;
     }
 
-    if (userId) {
+    if (userId && auth.user.role === 'ADMIN') {
       where.userId = userId;
     }
 
@@ -111,6 +122,9 @@ export async function POST(request: NextRequest) {
   let prisma;
 
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const body = await request.json();
     console.log('Received ticket data:', JSON.stringify(body, null, 2));
@@ -133,9 +147,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!canAccessProperty(auth.user, property)) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 403 });
+    }
+
     // Verificar que el usuario existe
+    const effectiveUserId = auth.user.role === 'ADMIN' ? validatedData.userId : auth.user.id;
     const user = await prisma.user.findUnique({
-      where: { id: validatedData.userId },
+      where: { id: effectiveUserId },
     });
 
     if (!user) {
@@ -159,7 +178,7 @@ export async function POST(request: NextRequest) {
         photos: validatedData.photos ?? null,
           attachments: validatedData.attachments ?? null,
         propertyId: validatedData.propertyId,
-        userId: validatedData.userId,
+        userId: effectiveUserId,
       },
       include: {
         property: {

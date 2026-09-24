@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { hash } from 'bcryptjs';
 import { z } from 'zod';
+import { requireApiUser } from '@/lib/api-auth';
+import { canAccessUser } from '@/lib/authorization';
 
 // Esquema de validación para actualizar usuario
 const updateUserSchema = z.object({
@@ -21,8 +23,15 @@ export async function GET(
   let prisma;
 
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
+
+    if (!canAccessUser(auth.user, id)) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 403 });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id },
@@ -81,8 +90,15 @@ export async function PUT(
   let prisma;
 
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
+
+    if (!canAccessUser(auth.user, id)) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 403 });
+    }
     const body = await request.json();
 
     // Validar datos de entrada
@@ -202,6 +218,9 @@ export async function DELETE(
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
 

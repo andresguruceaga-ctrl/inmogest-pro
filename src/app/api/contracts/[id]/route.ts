@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
+import { requireApiUser } from '@/lib/api-auth';
 
 // Esquema de validación para actualizar contrato
 const updateContractSchema = z.object({
@@ -25,6 +26,9 @@ export async function GET(
   let prisma;
 
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
 
@@ -83,6 +87,14 @@ export async function GET(
       );
     }
 
+    if (
+      auth.user.role !== 'ADMIN' &&
+      contract.ownerId !== auth.user.id &&
+      contract.tenantId !== auth.user.id
+    ) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 403 });
+    }
+
     // Agregar información calculada
     const isActive = new Date() >= contract.startDate && new Date() <= contract.endDate;
     const daysRemaining = Math.ceil(
@@ -125,6 +137,9 @@ export async function PUT(
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
     const body = await request.json();
@@ -282,6 +297,9 @@ export async function DELETE(
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
 

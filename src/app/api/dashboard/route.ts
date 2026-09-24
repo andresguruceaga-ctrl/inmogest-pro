@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateFinancialTotals } from '@/lib/finance';
 import { getPrismaClient } from '@/lib/prisma';
+import { requireApiUser } from '@/lib/api-auth';
 
 // GET - Obtener estadísticas del dashboard
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   let prisma;
 
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
-    const { searchParams } = new URL(request.url);
-    const role = searchParams.get('role');
-    const userId = searchParams.get('userId');
+    const role = auth.user.role.toLowerCase();
+    const userId = auth.user.id;
 
     // Obtener fecha actual
     const now = new Date();

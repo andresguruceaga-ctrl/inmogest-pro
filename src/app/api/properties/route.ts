@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { requireApiUser } from '@/lib/api-auth';
+import { propertyScope } from '@/lib/authorization';
 
 // Esquema de validación simplificado - coincide con el formulario del frontend
 const createPropertySchema = z.object({
@@ -40,30 +42,19 @@ const createPropertySchema = z.object({
 // GET - Listar propiedades
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
-    const role = searchParams.get('role');
-    const userId = searchParams.get('userId');
     const status = searchParams.get('status');
     const propertyType = searchParams.get('propertyType');
     const province = searchParams.get('province');
 
     // Construir filtros dinámicos
-    const where: Record<string, unknown> = { isActive: true };
-
-    // Filtrar por rol de usuario
-    if (role && userId) {
-      switch (role.toUpperCase()) {
-        case 'ADMIN':
-          where.adminId = userId;
-          break;
-        case 'PROPIETARIO':
-          where.ownerId = userId;
-          break;
-        case 'INQUILINO':
-          where.tenantId = userId;
-          break;
-      }
-    }
+    const where: Record<string, unknown> = {
+      isActive: true,
+      ...propertyScope(auth.user),
+    };
 
     // Filtros adicionales
     if (status) {
@@ -153,6 +144,9 @@ export async function GET(request: NextRequest) {
 // POST - Crear propiedad
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     
     console.log('Received property data:', JSON.stringify(body, null, 2));

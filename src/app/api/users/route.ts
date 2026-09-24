@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { hash } from 'bcryptjs';
+import { requireApiUser } from '@/lib/api-auth';
 
 // GET - Listar todos los usuarios
 export async function GET(request: Request) {
   let prisma;
   
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { searchParams } = new URL(request.url);
     const role = searchParams.get('role');
@@ -61,6 +65,9 @@ export async function POST(request: Request) {
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const body = await request.json();
     const { email, password, name, phone, role } = body;

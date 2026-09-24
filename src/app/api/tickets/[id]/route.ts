@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
+import { requireApiUser } from '@/lib/api-auth';
 
 // GET - Obtener un ticket especifico
 export async function GET(
@@ -9,6 +10,9 @@ export async function GET(
   let prisma;
 
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
 
@@ -42,6 +46,14 @@ export async function GET(
       );
     }
 
+    if (
+      auth.user.role !== 'ADMIN' &&
+      ticket.property.ownerId !== auth.user.id &&
+      ticket.userId !== auth.user.id
+    ) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 403 });
+    }
+
     return NextResponse.json({
       success: true,
       data: ticket,
@@ -67,6 +79,9 @@ export async function PUT(
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
     const body = await request.json();
@@ -163,6 +178,9 @@ export async function DELETE(
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { id } = await params;
 

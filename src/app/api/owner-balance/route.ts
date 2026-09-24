@@ -1,24 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireApiUser } from '@/lib/api-auth';
 
 // GET - Obtener balance de gastos por propiedad
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const auth = await requireApiUser(['ADMIN', 'PROPIETARIO']);
+    if (!auth.ok) return auth.response;
 
     const { searchParams } = new URL(request.url);
     const ownerId = searchParams.get('ownerId');
     const propertyId = searchParams.get('propertyId');
 
     // Si es propietario, solo puede ver sus propios datos
-    const effectiveOwnerId = session.user.role === 'PROPIETARIO'
-      ? session.user.id
+    const effectiveOwnerId = auth.user.role === 'PROPIETARIO'
+      ? auth.user.id
       : ownerId;
 
     // Construir filtro de propiedades

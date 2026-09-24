@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireApiUser } from '@/lib/api-auth'
 
 // GET - Obtener documentos del propietario (documentos de sus propiedades)
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireApiUser(['ADMIN', 'PROPIETARIO'])
+    if (!auth.ok) return auth.response
+
     const { searchParams } = new URL(request.url)
-    const ownerId = searchParams.get('ownerId')
+    const requestedOwnerId = searchParams.get('ownerId')
+    const ownerId = auth.user.role === 'PROPIETARIO' ? auth.user.id : requestedOwnerId
 
     if (!ownerId) {
       return NextResponse.json(

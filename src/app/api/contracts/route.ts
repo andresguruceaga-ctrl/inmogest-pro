@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
+import { requireApiUser } from '@/lib/api-auth';
 
 // Esquema de validación para crear contrato
 const createContractSchema = z.object({
@@ -23,6 +24,9 @@ export async function GET(request: NextRequest) {
   let prisma;
 
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get('propertyId');
@@ -38,11 +42,13 @@ export async function GET(request: NextRequest) {
       where.propertyId = propertyId;
     }
 
-    if (ownerId) {
+    if (auth.user.role === 'PROPIETARIO') {
+      where.ownerId = auth.user.id;
+    } else if (auth.user.role === 'INQUILINO') {
+      where.tenantId = auth.user.id;
+    } else if (ownerId) {
       where.ownerId = ownerId;
-    }
-
-    if (tenantId) {
+    } else if (tenantId) {
       where.tenantId = tenantId;
     }
 
@@ -136,6 +142,9 @@ export async function POST(request: NextRequest) {
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const body = await request.json();
     console.log('Received contract data:', JSON.stringify(body, null, 2));

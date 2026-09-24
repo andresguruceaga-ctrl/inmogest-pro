@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
+import { requireApiUser } from '@/lib/api-auth';
 
 // Esquema de validación para crear documento
 const createDocumentSchema = z.object({
@@ -20,6 +21,9 @@ export async function GET(request: NextRequest) {
   let prisma;
   
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get('propertyId');
@@ -30,11 +34,18 @@ export async function GET(request: NextRequest) {
     // Construir filtros dinámicos
     const where: Record<string, unknown> = {};
 
+    if (auth.user.role === 'PROPIETARIO') {
+      where.property = { ownerId: auth.user.id };
+    } else if (auth.user.role === 'INQUILINO') {
+      where.property = { tenantId: auth.user.id };
+      where.uploadedBy = auth.user.id;
+    }
+
     if (propertyId) {
       where.propertyId = propertyId;
     }
 
-    if (uploadedBy) {
+    if (uploadedBy && auth.user.role === 'ADMIN') {
       where.uploadedBy = uploadedBy;
     }
 
@@ -126,6 +137,9 @@ export async function POST(request: NextRequest) {
   let prisma;
 
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     prisma = getPrismaClient();
     const body = await request.json();
     console.log('Received document data:', JSON.stringify(body, null, 2));

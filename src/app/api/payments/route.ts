@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { z } from 'zod';
+import { requireApiUser } from '@/lib/api-auth';
 
 // Esquema de validación para crear pago
 const createPaymentSchema = z.object({
@@ -20,6 +21,9 @@ const createPaymentSchema = z.object({
 // GET - Listar pagos
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireApiUser();
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get('propertyId');
     const userId = searchParams.get('userId');
@@ -34,11 +38,17 @@ export async function GET(request: NextRequest) {
     // Construir filtros dinámicos
     const where: Record<string, unknown> = {};
 
+    if (auth.user.role === 'PROPIETARIO') {
+      where.property = { ownerId: auth.user.id };
+    } else if (auth.user.role === 'INQUILINO') {
+      where.userId = auth.user.id;
+    }
+
     if (propertyId) {
       where.propertyId = propertyId;
     }
 
-    if (userId) {
+    if (userId && auth.user.role === 'ADMIN') {
       where.userId = userId;
     }
 
@@ -187,6 +197,9 @@ export async function GET(request: NextRequest) {
 // POST - Registrar pago
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireApiUser(['ADMIN']);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
 
     // Validar datos de entrada
