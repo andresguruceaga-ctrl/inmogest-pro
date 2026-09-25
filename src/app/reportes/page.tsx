@@ -62,6 +62,17 @@ interface ReportData {
     paymentsCount: number
     expensesCount: number
     owner?: { id: string; name: string }
+    tenant?: { id: string; name: string; email?: string; phone?: string } | null
+    contract?: {
+      id: string
+      contractNumber: string
+      contractType: string
+      startDate: string
+      endDate: string
+      monthlyAmount: number
+      deposit: number
+      status: string
+    } | null
     expensesDetails?: {
       fixed: Array<{ id: string; description: string; amount: number; date: string; category: string }>
       variable: Array<{ id: string; description: string; amount: number; date: string; category: string }>
@@ -1049,6 +1060,41 @@ const handleDownloadPDF = () => {
                                   <p className="text-xs text-muted-foreground">Neto</p>
                                   <p className="font-bold text-primary">{formatCurrency(prop.netIncome)}</p>
                                 </div>
+                              </div>
+
+                              {/* Contract Summary */}
+                              <div className="rounded-lg border bg-background p-4">
+                                <div className="mb-3 flex items-center gap-2">
+                                  <FileText className="h-4 w-4 text-primary" />
+                                  <h4 className="font-medium text-sm">Contrato vigente</h4>
+                                </div>
+                                {prop.contract ? (
+                                  <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Número y tipo</p>
+                                      <p className="font-medium">{prop.contract.contractNumber}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {prop.contract.contractType === 'ARRENDAMIENTO' ? 'Arrendamiento' : 'Administración'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Inquilino</p>
+                                      <p className="font-medium">{prop.tenant?.name || 'No aplica'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Vigencia</p>
+                                      <p className="font-medium">
+                                        {new Date(prop.contract.startDate).toLocaleDateString('es-PA')} – {new Date(prop.contract.endDate).toLocaleDateString('es-PA')}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Monto mensual</p>
+                                      <p className="font-medium">{formatCurrency(prop.contract.monthlyAmount)}</p>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-muted-foreground">No hay contrato vigente para esta propiedad.</p>
+                                )}
                               </div>
 
                               {/* Expenses Details */}

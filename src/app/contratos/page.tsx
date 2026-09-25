@@ -532,6 +532,8 @@ export default function ContratosPage() {
       const doc = await generateContractPDF({
         contract: {
           id: contract.id,
+          contractNumber: contract.contractNumber,
+          contractType: contract.contractType,
           property: {
             name: contract.property?.title || 'N/A',
             address: contract.property?.address || 'N/A',
@@ -554,6 +556,7 @@ export default function ContratosPage() {
           monthlyRent: contract.monthlyAmount ?? 0,
           deposit: contract.depositAmount ?? 0,
           status: contract.status,
+          terms: contract.terms,
         },
       })
 

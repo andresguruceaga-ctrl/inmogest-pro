@@ -72,3 +72,19 @@ Los calculos de pagos y alquileres no se cambiaron; esta correccion se limita a 
 - La pantalla adopta la estructura visual de los informes de referencia: cabecera verde azulado, sello de periodo, tarjetas KPI y paneles blancos.
 - Se añadió impresion nativa con formato A4 horizontal y opcion de guardar como PDF.
 - Los controles, la barra lateral, la cabecera de aplicacion y el pie se ocultan al imprimir.
+
+## Cuarta fase completada
+
+### Importacion financiera desde Excel
+
+- Se añadió una plantilla descargable con hojas separadas para gastos, pagos de inquilinos y pagos de propietarios.
+- La carga funciona en dos pasos: primero valida todas las filas y luego requiere confirmacion para guardar.
+- La API comprueba propiedades, usuarios, contratos, roles, duplicados internos y referencias/facturas ya registradas.
+- La importacion es atomica: si una fila tiene errores no se guarda ningun registro.
+- Los gastos importados conservan la regla financiera del sistema: `itbmsAmount = 0` y `totalAmount = amount`.
+
+### Contratos en reportes y PDF
+
+- Los reportes priorizan el contrato de arrendamiento cuando una propiedad tambien tiene contrato de administracion.
+- La pantalla y el PDF financiero muestran numero, tipo, vigencia y monto del contrato seleccionado.
+- El PDF individual de contratos ahora distribuye contenido largo entre paginas, incluye terminos y agrega numeracion de paginas.

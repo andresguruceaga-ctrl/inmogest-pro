@@ -20,6 +20,8 @@ interface ReportPropertyData {
   tenant?: { id: string; name: string; email?: string; phone?: string } | null
   contract?: {
     id: string
+    contractNumber: string
+    contractType: string
     startDate: string
     endDate: string
     monthlyAmount: number
@@ -353,7 +355,7 @@ export function generateReportPDF(params: ReportPDFParams): jsPDF {
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(10)
       doc.setFont('helvetica', 'bold')
-      doc.text('INFORMACION DEL CONTRATO DE ARRENDAMIENTO', margin + 3, yPosition + 6)
+      doc.text('INFORMACION DEL CONTRATO', margin + 3, yPosition + 6)
       yPosition += 14
 
       doc.setTextColor(60, 60, 60)
@@ -361,6 +363,10 @@ export function generateReportPDF(params: ReportPDFParams): jsPDF {
       doc.setFont('helvetica', 'normal')
       
       if (property.contract) {
+        doc.text('Numero: ' + safeText(property.contract.contractNumber || property.contract.id), margin + 5, yPosition)
+        yPosition += 6
+        doc.text('Tipo: ' + (property.contract.contractType === 'ARRENDAMIENTO' ? 'Arrendamiento' : 'Administracion'), margin + 5, yPosition)
+        yPosition += 6
         doc.text('Fecha de Inicio: ' + formatDate(property.contract.startDate), margin + 5, yPosition)
         yPosition += 6
         doc.text('Fecha de Fin: ' + formatDate(property.contract.endDate), margin + 5, yPosition)
@@ -874,11 +880,14 @@ export function generateReportPDF(params: ReportPDFParams): jsPDF {
 export async function generateContractPDF(data: {
   contract: {
     id: string
+    contractNumber?: string
+    contractType?: string
     startDate: string
     endDate: string
     monthlyRent: number
     deposit: number
     status: string
+    terms?: string | null
     property: {
       name: string
       address: string
@@ -898,55 +907,103 @@ export async function generateContractPDF(data: {
 }): Promise<jsPDF> {
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
-  
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const margin = 16
+  const contentWidth = pageWidth - margin * 2
+  let y = 18
+
   const safeText = (text: string | undefined | null): string => {
     if (!text) return ''
-    return text.replace(/[^\x00-\xFF]/g, '').substring(0, 200)
+    return text.replace(/[^\x00-\xFF]/g, '')
   }
 
-  doc.setFontSize(20)
-  doc.text('CONTRATO DE ARRENDAMIENTO', pageWidth / 2, 20, { align: 'center' })
-  
-  doc.setFontSize(10)
-  doc.text('Generado el: ' + new Date().toLocaleDateString('es-PA'), pageWidth / 2, 30, { align: 'center' })
-  
-  doc.setFontSize(12)
-  doc.text('INFORMACION DE LA PROPIEDAD', 14, 45)
-  doc.setFontSize(10)
-  doc.text('Propiedad: ' + safeText(data.contract.property.name), 14, 55)
-  doc.text('Direccion: ' + safeText(data.contract.property.address), 14, 62)
-  
-  doc.setFontSize(12)
-  doc.text('INFORMACION DEL INQUILINO', 14, 77)
-  doc.setFontSize(10)
-  doc.text('Nombre: ' + safeText(data.contract.tenant.name), 14, 87)
-  doc.text('Email: ' + safeText(data.contract.tenant.email), 14, 94)
-  if (data.contract.tenant.phone) {
-    doc.text('Telefono: ' + safeText(data.contract.tenant.phone), 14, 101)
+  const addPage = () => {
+    doc.addPage()
+    y = 18
+    doc.setTextColor(18, 107, 115)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.text('InmoGest Pro · Contrato', margin, 10)
   }
-  if (data.contract.tenant.dni) {
-    doc.text('DNI: ' + safeText(data.contract.tenant.dni), 14, 108)
+
+  const ensureSpace = (height: number) => {
+    if (y + height > pageHeight - 18) addPage()
   }
-  
-  doc.setFontSize(12)
-  doc.text('DETALLES DEL CONTRATO', 14, 123)
-  doc.setFontSize(10)
-  doc.text('Fecha de Inicio: ' + new Date(data.contract.startDate).toLocaleDateString('es-PA'), 14, 133)
-  doc.text('Fecha de Fin: ' + new Date(data.contract.endDate).toLocaleDateString('es-PA'), 14, 140)
-  doc.text('Alquiler Mensual: $' + (data.contract.monthlyRent || 0).toFixed(2), 14, 147)
-  doc.text('Deposito: $' + (data.contract.deposit || 0).toFixed(2), 14, 154)
-  doc.text('Estado: ' + (data.contract.status || 'N/A'), 14, 161)
-  
-  if (data.contract.owner) {
-    doc.setFontSize(12)
-    doc.text('INFORMACION DEL PROPIETARIO', 14, 176)
-    doc.setFontSize(10)
-    doc.text('Nombre: ' + safeText(data.contract.owner.name), 14, 186)
-    doc.text('Email: ' + safeText(data.contract.owner.email), 14, 193)
-    if (data.contract.owner.phone) {
-      doc.text('Telefono: ' + safeText(data.contract.owner.phone), 14, 200)
+
+  const addSection = (title: string, entries: Array<[string, string | undefined | null]>) => {
+    const rendered = entries.filter(([, value]) => value).map(([label, value]) => ({
+      label,
+      lines: doc.splitTextToSize(`${label}: ${safeText(value)}`, contentWidth - 8) as string[],
+    }))
+    const height = 11 + rendered.reduce((sum, entry) => sum + Math.max(6, entry.lines.length * 5), 0)
+    ensureSpace(Math.min(height, pageHeight - 36))
+    doc.setFillColor(232, 246, 244)
+    doc.roundedRect(margin, y, contentWidth, 8, 2, 2, 'F')
+    doc.setTextColor(18, 107, 115)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.text(title, margin + 4, y + 5.5)
+    y += 13
+    doc.setTextColor(45, 55, 60)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9.5)
+    for (const entry of rendered) {
+      for (const line of entry.lines) {
+        ensureSpace(7)
+        doc.text(line, margin + 4, y)
+        y += 5
+      }
+      y += 1
     }
+    y += 5
   }
-  
+
+  doc.setFillColor(18, 59, 74)
+  doc.rect(0, 0, pageWidth, 38, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(19)
+  doc.text(data.contract.contractType === 'ADMINISTRACION' ? 'CONTRATO DE ADMINISTRACION' : 'CONTRATO DE ARRENDAMIENTO', pageWidth / 2, 17, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.text(`Contrato ${safeText(data.contract.contractNumber || data.contract.id)} · Generado ${new Date().toLocaleDateString('es-PA')}`, pageWidth / 2, 27, { align: 'center' })
+  y = 49
+
+  addSection('PROPIEDAD', [
+    ['Propiedad', data.contract.property.name],
+    ['Direccion', data.contract.property.address],
+  ])
+  addSection('INQUILINO', [
+    ['Nombre', data.contract.tenant.name],
+    ['Email', data.contract.tenant.email],
+    ['Telefono', data.contract.tenant.phone],
+    ['Documento', data.contract.tenant.dni],
+  ])
+  addSection('CONDICIONES', [
+    ['Fecha de inicio', new Date(data.contract.startDate).toLocaleDateString('es-PA')],
+    ['Fecha de fin', new Date(data.contract.endDate).toLocaleDateString('es-PA')],
+    ['Alquiler mensual', `$${(data.contract.monthlyRent || 0).toFixed(2)}`],
+    ['Deposito', `$${(data.contract.deposit || 0).toFixed(2)}`],
+    ['Estado', data.contract.status || 'N/A'],
+  ])
+  if (data.contract.owner) {
+    addSection('PROPIETARIO', [
+      ['Nombre', data.contract.owner.name],
+      ['Email', data.contract.owner.email],
+      ['Telefono', data.contract.owner.phone],
+    ])
+  }
+  if (data.contract.terms?.trim()) addSection('TERMINOS Y OBSERVACIONES', [['Detalle', data.contract.terms]])
+
+  const totalPages = doc.getNumberOfPages()
+  for (let page = 1; page <= totalPages; page += 1) {
+    doc.setPage(page)
+    doc.setDrawColor(210, 218, 222)
+    doc.line(margin, pageHeight - 13, pageWidth - margin, pageHeight - 13)
+    doc.setTextColor(120, 130, 135)
+    doc.setFontSize(8)
+    doc.text(`Pagina ${page} de ${totalPages}`, pageWidth / 2, pageHeight - 8, { align: 'center' })
+  }
+
   return doc
 }

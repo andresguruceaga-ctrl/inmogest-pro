@@ -46,6 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'inquilinos', label: 'Inquilinos', href: '/inquilinos', icon: 'Users', roles: ['admin'] },
   { id: 'propietarios', label: 'Propietarios', href: '/propietarios', icon: 'UserCheck', roles: ['admin'] },
   { id: 'relacion-gastos', label: 'Relación de Gastos', href: '/relacion-gastos', icon: 'Wallet', roles: ['admin'] },
+  { id: 'importar-excel', label: 'Importar Excel', href: '/importar-excel', icon: 'FileSpreadsheet', roles: ['admin'] },
   { id: 'reportes', label: 'Reportes', href: '/reportes', icon: 'BarChart3', roles: ['admin'] },
   { id: 'soporte', label: 'Soporte', href: '/soporte', icon: 'HelpCircle', roles: ['admin'] },
   

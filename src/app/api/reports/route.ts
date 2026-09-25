@@ -202,9 +202,11 @@ export async function GET(request: NextRequest) {
       const fixedExpenses = fixedExpensesList.reduce((sum, e) => sum + e.amount, 0)
       const variableExpenses = variableExpensesList.reduce((sum, e) => sum + e.amount, 0)
       const grossIncome = propertyPayments.reduce((sum, p) => sum + p.totalAmount, 0)
-      const monthlyRent = property.contracts[0]?.monthlyAmount || 0
-
-      const activeContract = property.contracts[0]
+      // A property can have both administration and rental contracts. Reports
+      // must prefer the rental contract so the tenant and rent are coherent.
+      const activeContract = property.contracts.find(contract => contract.contractType === 'ARRENDAMIENTO')
+        ?? property.contracts[0]
+      const monthlyRent = activeContract?.monthlyAmount || 0
 
       return {
         propertyId: property.id,
@@ -231,6 +233,8 @@ export async function GET(request: NextRequest) {
         } : null,
         contract: activeContract ? {
           id: activeContract.id,
+          contractNumber: activeContract.contractNumber,
+          contractType: activeContract.contractType,
           startDate: activeContract.startDate.toISOString(),
           endDate: activeContract.endDate.toISOString(),
           monthlyAmount: activeContract.monthlyAmount,
