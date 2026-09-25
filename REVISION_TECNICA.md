@@ -88,3 +88,12 @@ Los calculos de pagos y alquileres no se cambiaron; esta correccion se limita a 
 - Los reportes priorizan el contrato de arrendamiento cuando una propiedad tambien tiene contrato de administracion.
 - La pantalla y el PDF financiero muestran numero, tipo, vigencia y monto del contrato seleccionado.
 - El PDF individual de contratos ahora distribuye contenido largo entre paginas, incluye terminos y agrega numeracion de paginas.
+
+## Quinta fase completada
+
+### Relación de gastos entre propietario y administrador
+
+- Reportes incorpora una pestaña independiente con gastos pagados por el administrador, abonos del propietario y saldo acumulado.
+- Los filtros de propietario y propiedad también limitan esta relación sin mezclar pagos de otras propiedades.
+- La pestaña permite descargar un PDF propio con resumen, movimientos y balance final.
+- El informe financiero existente conserva su descarga separada.

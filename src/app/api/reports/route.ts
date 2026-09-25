@@ -158,7 +158,13 @@ export async function GET(request: NextRequest) {
 
     // Get owner payments
     const ownerPayments = await prisma.ownerPayment.findMany({
-      where: effectiveOwnerId ? { ownerId: effectiveOwnerId } : {},
+      where: {
+        propertyId: { in: propertyIds },
+        ...(effectiveOwnerId ? { ownerId: effectiveOwnerId } : {}),
+      },
+      include: {
+        property: { select: { id: true, title: true } }
+      },
       orderBy: { paymentDate: 'desc' }
     })
 
@@ -181,7 +187,11 @@ export async function GET(request: NextRequest) {
         date: p.paymentDate.toISOString(),
         method: p.paymentMethod,
         reference: p.referenceNumber,
-        notes: p.notes
+        notes: p.notes,
+        property: p.property ? {
+          id: p.property.id,
+          title: p.property.title,
+        } : null,
       })),
       totals: {
         pending: pendingExpenses.reduce((sum, e) => sum + e.amount, 0),

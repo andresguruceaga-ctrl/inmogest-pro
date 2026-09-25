@@ -69,7 +69,7 @@ interface TicketData {
   property: { id: string; title: string; address: string }
 }
 
-interface OwnerBalanceData {
+export interface OwnerBalanceData {
   pendingExpenses: Array<{
     id: string
     description: string
@@ -82,9 +82,10 @@ interface OwnerBalanceData {
     id: string
     amount: number
     date: string
-    method: string
-    reference?: string
-    notes?: string
+    method: string | null
+    reference?: string | null
+    notes?: string | null
+    property?: { id: string; title: string } | null
   }>
   totals: {
     pending: number
@@ -871,6 +872,199 @@ export function generateReportPDF(params: ReportPDFParams): jsPDF {
       pageHeight - 10,
       { align: 'center' }
     )
+  }
+
+  return doc
+}
+
+export function generateOwnerBalancePDF(params: {
+  title: string
+  period: string
+  data: OwnerBalanceData
+}): jsPDF {
+  const { title, period, data } = params
+  const doc = new jsPDF()
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const margin = 15
+  const contentWidth = pageWidth - margin * 2
+  let y = 46
+
+  const safeText = (value: string | null | undefined) => (value || '').replace(/[^\x00-\xFF]/g, '')
+  const formatCurrency = (amount: number) => new Intl.NumberFormat('es-PA', {
+    style: 'currency', currency: 'USD',
+  }).format(Number.isFinite(amount) ? amount : 0)
+  const formatDate = (value: string) => new Date(value).toLocaleDateString('es-PA')
+
+  const addHeader = () => {
+    doc.setFillColor(18, 59, 74)
+    doc.rect(0, 0, pageWidth, 34, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(18)
+    doc.text(safeText(title), margin, 16)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.text(`Período: ${safeText(period)}`, margin, 25)
+    doc.text(`Generado: ${new Date().toLocaleDateString('es-PA')}`, pageWidth - margin, 25, { align: 'right' })
+  }
+  const ensureSpace = (height: number) => {
+    if (y + height > pageHeight - 18) {
+      doc.addPage()
+      addHeader()
+      y = 43
+      return true
+    }
+    return false
+  }
+  const sectionTitle = (text: string, color: [number, number, number]) => {
+    ensureSpace(16)
+    doc.setFillColor(...color)
+    doc.roundedRect(margin, y, contentWidth, 8, 2, 2, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.text(safeText(text), margin + 4, y + 5.5)
+    y += 12
+  }
+
+  addHeader()
+
+  const cards = [
+    { label: 'Gastos adelantados', value: data.totals.pending, color: [239, 107, 98] as [number, number, number] },
+    { label: 'Abonos del propietario', value: data.totals.payments, color: [25, 165, 157] as [number, number, number] },
+    { label: data.totals.balance >= 0 ? 'A favor del propietario' : 'Pendiente al administrador', value: Math.abs(data.totals.balance), color: [53, 120, 200] as [number, number, number] },
+  ]
+  const cardGap = 5
+  const cardWidth = (contentWidth - cardGap * 2) / 3
+  cards.forEach((card, index) => {
+    const x = margin + index * (cardWidth + cardGap)
+    doc.setFillColor(247, 249, 250)
+    doc.setDrawColor(224, 229, 232)
+    doc.roundedRect(x, y, cardWidth, 25, 2, 2, 'FD')
+    doc.setTextColor(95, 105, 110)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.5)
+    doc.text(safeText(card.label), x + 4, y + 8)
+    doc.setTextColor(...card.color)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.text(formatCurrency(card.value), x + 4, y + 18)
+  })
+  y += 34
+
+  sectionTitle('GASTOS PAGADOS POR EL ADMINISTRADOR PENDIENTES DE REEMBOLSO', [239, 107, 98])
+  const drawExpenseHeader = () => {
+    doc.setFillColor(240, 243, 245)
+    doc.rect(margin, y, contentWidth, 7, 'F')
+    doc.setTextColor(60, 70, 75)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.text('Descripción', margin + 3, y + 5)
+    doc.text('Propiedad', margin + 82, y + 5)
+    doc.text('Fecha', margin + 132, y + 5)
+    doc.text('Monto', pageWidth - margin - 3, y + 5, { align: 'right' })
+    y += 9
+  }
+  drawExpenseHeader()
+  if (!data.pendingExpenses.length) {
+    doc.setTextColor(100, 110, 115)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.text('No hay gastos pendientes de reembolso.', margin + 3, y + 5)
+    y += 12
+  } else {
+    for (const expense of data.pendingExpenses) {
+      const description = doc.splitTextToSize(safeText(expense.description), 74) as string[]
+      const property = doc.splitTextToSize(safeText(expense.property.title), 43) as string[]
+      const rowHeight = Math.max(8, Math.max(description.length, property.length) * 4 + 3)
+      if (ensureSpace(rowHeight + 2)) drawExpenseHeader()
+      doc.setTextColor(55, 65, 70)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.text(description, margin + 3, y + 4)
+      doc.text(property, margin + 82, y + 4)
+      doc.text(formatDate(expense.date), margin + 132, y + 4)
+      doc.setFont('helvetica', 'bold')
+      doc.text(formatCurrency(expense.amount), pageWidth - margin - 3, y + 4, { align: 'right' })
+      y += rowHeight
+      doc.setDrawColor(232, 235, 237)
+      doc.line(margin, y, pageWidth - margin, y)
+    }
+    y += 5
+  }
+
+  sectionTitle('ABONOS REALIZADOS POR EL PROPIETARIO', [25, 165, 157])
+  const drawPaymentHeader = () => {
+    doc.setFillColor(240, 243, 245)
+    doc.rect(margin, y, contentWidth, 7, 'F')
+    doc.setTextColor(60, 70, 75)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.text('Fecha', margin + 3, y + 5)
+    doc.text('Propiedad', margin + 31, y + 5)
+    doc.text('Método / referencia', margin + 86, y + 5)
+    doc.text('Monto', pageWidth - margin - 3, y + 5, { align: 'right' })
+    y += 9
+  }
+  drawPaymentHeader()
+  if (!data.ownerPayments.length) {
+    doc.setTextColor(100, 110, 115)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.text('No hay abonos registrados para la seleccion actual.', margin + 3, y + 5)
+    y += 12
+  } else {
+    for (const payment of data.ownerPayments) {
+      const property = doc.splitTextToSize(safeText(payment.property?.title || 'Sin propiedad'), 48) as string[]
+      const method = safeText([payment.method, payment.reference].filter(Boolean).join(' - ') || 'Sin referencia')
+      const methodLines = doc.splitTextToSize(method, 57) as string[]
+      const notes = payment.notes ? doc.splitTextToSize(`Nota: ${safeText(payment.notes)}`, 105) as string[] : []
+      const rowHeight = Math.max(8, Math.max(property.length, methodLines.length) * 4 + 3) + notes.length * 4
+      if (ensureSpace(rowHeight + 2)) drawPaymentHeader()
+      doc.setTextColor(55, 65, 70)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.text(formatDate(payment.date), margin + 3, y + 4)
+      doc.text(property, margin + 31, y + 4)
+      doc.text(methodLines, margin + 86, y + 4)
+      doc.setFont('helvetica', 'bold')
+      doc.text(formatCurrency(payment.amount), pageWidth - margin - 3, y + 4, { align: 'right' })
+      if (notes.length) {
+        doc.setFont('helvetica', 'italic')
+        doc.setTextColor(105, 115, 120)
+        doc.text(notes, margin + 31, y + Math.max(property.length, methodLines.length) * 4 + 5)
+      }
+      y += rowHeight
+      doc.setDrawColor(232, 235, 237)
+      doc.line(margin, y, pageWidth - margin, y)
+    }
+  }
+
+  ensureSpace(38)
+  y += 8
+  doc.setFillColor(232, 246, 244)
+  doc.setDrawColor(18, 107, 115)
+  doc.roundedRect(margin, y, contentWidth, 28, 3, 3, 'FD')
+  doc.setTextColor(18, 59, 74)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+    doc.text('BALANCE DE LA RELACIÓN', pageWidth / 2, y + 8, { align: 'center' })
+  doc.setFontSize(13)
+  doc.text(
+    `${data.totals.balance >= 0 ? 'A favor del propietario' : 'Pendiente al administrador'}: ${formatCurrency(Math.abs(data.totals.balance))}`,
+    pageWidth / 2, y + 19, { align: 'center' }
+  )
+
+  const totalPages = doc.getNumberOfPages()
+  for (let page = 1; page <= totalPages; page += 1) {
+    doc.setPage(page)
+    doc.setDrawColor(220, 225, 228)
+    doc.line(margin, pageHeight - 13, pageWidth - margin, pageHeight - 13)
+    doc.setTextColor(125, 135, 140)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.text(`Página ${page} de ${totalPages} - InmoGest Pro`, pageWidth / 2, pageHeight - 8, { align: 'center' })
   }
 
   return doc

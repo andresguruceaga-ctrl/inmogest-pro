@@ -11,18 +11,19 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   Download, TrendingUp, TrendingDown, DollarSign, Receipt, BarChart3, 
   Building2, Calendar, ChevronDown, ChevronUp, Loader2, FileText,
   ArrowUpRight, ArrowDownRight, Eye, AlertCircle, ChevronRight, Sparkles,
-  HelpCircle, Clock, CheckCircle, AlertTriangle, Printer
+  HelpCircle, Clock, CheckCircle, AlertTriangle, Printer, Wallet
 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { useAppStore } from '@/lib/store'
 import { useToast } from '@/hooks/use-toast'
-import { generateReportPDF } from '@/lib/pdf-utils'
+import { generateOwnerBalancePDF, generateReportPDF, type OwnerBalanceData } from '@/lib/pdf-utils'
 import { cn } from '@/lib/utils'
 
 interface Owner {
@@ -121,6 +122,7 @@ interface ReportData {
     createdAt: string
     property: { id: string; title: string; address: string }
   }>
+  ownerBalance?: OwnerBalanceData | null
 }
 
 const months = [
@@ -173,6 +175,7 @@ export default function ReportesPage() {
   const [loading, setLoading] = useState(false)
   const [reportData, setReportData] = useState<ReportData | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
+  const [reportView, setReportView] = useState<'financial' | 'owner-balance'>('financial')
   
   // Filters
   const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly')
@@ -460,6 +463,46 @@ const handleDownloadPDF = () => {
     }
   }
 
+  const handleDownloadOwnerBalancePDF = () => {
+    if (!reportData?.ownerBalance) {
+      toast({
+        title: 'Sin datos',
+        description: 'No hay una relación de gastos disponible para exportar.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    try {
+      const selectedProperty = selectedPropertyId === 'all'
+        ? null
+        : properties.find(property => property.id === selectedPropertyId)
+      const selectedOwner = selectedOwnerId && selectedOwnerId !== 'all'
+        ? owners.find(owner => owner.id === selectedOwnerId)
+        : null
+      const scopeName = selectedProperty?.title || selectedOwner?.name || 'Portafolio'
+      const safeScope = scopeName.replace(/[^a-zA-Z0-9]/g, '_')
+      const doc = generateOwnerBalancePDF({
+        title: `Relación de gastos - ${scopeName}`,
+        period: `Saldo acumulado al ${new Date().toLocaleDateString('es-PA')}`,
+        data: reportData.ownerBalance,
+      })
+
+      doc.save(`relacion_gastos_${safeScope}.pdf`)
+      toast({
+        title: 'PDF descargado',
+        description: 'La relación de gastos fue exportada exitosamente.',
+      })
+    } catch (error) {
+      console.error('Error al generar la relación de gastos:', error)
+      toast({
+        title: 'Error',
+        description: 'No se pudo generar el PDF de la relación de gastos.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   // Aggregate all expenses across properties
   const getAllExpenses = () => {
     if (!reportData) return { fixed: [], variable: [] }
@@ -524,7 +567,9 @@ const handleDownloadPDF = () => {
                       : properties.find((property) => property.id === selectedPropertyId)?.title || 'Reporte de propiedad'}
                   </h1>
                   <p className="mt-2 max-w-2xl text-sm text-cyan-50/90 md:text-base">
-                    Ingresos, gastos, rendimiento y actividad operativa en un solo informe.
+                    {reportView === 'financial'
+                      ? 'Ingresos, gastos, rendimiento y actividad operativa en un solo informe.'
+                      : 'Gastos adelantados, abonos del propietario y saldo acumulado con el administrador.'}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/20 bg-white/10 px-5 py-4 text-left backdrop-blur-sm md:text-right">
@@ -539,7 +584,12 @@ const handleDownloadPDF = () => {
                   <Printer className="mr-2 h-4 w-4" />
                   Imprimir / Guardar PDF
                 </Button>
-                <Button variant="outline" className="border-white/40 bg-transparent text-white hover:bg-white/10 hover:text-white" onClick={handleDownloadPDF} disabled={!reportData || loading}>
+                <Button
+                  variant="outline"
+                  className="border-white/40 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                  onClick={reportView === 'financial' ? handleDownloadPDF : handleDownloadOwnerBalancePDF}
+                  disabled={!reportData || loading || (reportView === 'owner-balance' && !reportData?.ownerBalance)}
+                >
                   <Download className="mr-2 h-4 w-4" />
                   Descargar PDF
                 </Button>
@@ -636,8 +686,25 @@ const handleDownloadPDF = () => {
               </CardContent>
             </Card>
 
+            <Tabs
+              value={reportView}
+              onValueChange={value => setReportView(value as 'financial' | 'owner-balance')}
+              className="no-print"
+            >
+              <TabsList className="grid h-auto w-full max-w-xl grid-cols-2 rounded-xl bg-slate-200/70 p-1">
+                <TabsTrigger value="financial" className="min-h-10 rounded-lg">
+                  <BarChart3 className="h-4 w-4" />
+                  Informe financiero
+                </TabsTrigger>
+                <TabsTrigger value="owner-balance" className="min-h-10 rounded-lg">
+                  <Wallet className="h-4 w-4" />
+                  Relación de gastos
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
             {/* Admin Summary - Only visible for admins */}
-            {isAdmin && (
+            {isAdmin && reportView === 'financial' && (
               <Card className="rounded-2xl border-0 shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
@@ -690,6 +757,8 @@ const handleDownloadPDF = () => {
               </div>
             ) : reportData ? (
               <>
+                {reportView === 'financial' ? (
+                  <>
                 {/* Summary Cards */}
                 <div className="report-kpis grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <Card className="rounded-2xl border-l-4 border-l-[#19a59d] shadow-sm">
@@ -1264,6 +1333,14 @@ const handleDownloadPDF = () => {
                     </div>
                   </CardContent>
                 </Card>
+                  </>
+                ) : (
+                  <OwnerBalanceReport
+                    data={reportData.ownerBalance}
+                    formatCurrency={formatCurrency}
+                    onDownload={handleDownloadOwnerBalancePDF}
+                  />
+                )}
               </>
             ) : (
               <div className="text-center py-12 text-muted-foreground">
@@ -1279,5 +1356,151 @@ const handleDownloadPDF = () => {
         </div>
       </SidebarInset>
     </SidebarProvider>
+  )
+}
+
+function OwnerBalanceReport({
+  data,
+  formatCurrency,
+  onDownload,
+}: {
+  data?: OwnerBalanceData | null
+  formatCurrency: (amount: number) => string
+  onDownload: () => void
+}) {
+  if (!data) {
+    return (
+      <Card className="rounded-2xl border-0 shadow-sm">
+        <CardContent className="py-12 text-center text-muted-foreground">
+          <Wallet className="mx-auto mb-3 h-12 w-12 opacity-40" />
+          <p>No hay información disponible para la relación de gastos.</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const balanceLabel = data.totals.balance >= 0
+    ? 'A favor del propietario'
+    : 'Pendiente al administrador'
+
+  return (
+    <div className="space-y-6">
+      <Card className="rounded-2xl border-0 shadow-sm">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-[#126b73]" />
+              Relación entre propietario y administrador
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Saldo acumulado de gastos adelantados y abonos registrados para la selección actual.
+            </CardDescription>
+          </div>
+          <Button onClick={onDownload} className="no-print bg-[#126b73] hover:bg-[#0f5960]">
+            <Download className="mr-2 h-4 w-4" />
+            Descargar este PDF
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+              <p className="text-sm text-red-700">Gastos adelantados</p>
+              <p className="mt-1 text-2xl font-bold text-red-700">{formatCurrency(data.totals.pending)}</p>
+              <p className="mt-1 text-xs text-red-600">Pagados por el administrador y pendientes de reembolso</p>
+            </div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-sm text-emerald-700">Abonos del propietario</p>
+              <p className="mt-1 text-2xl font-bold text-emerald-700">{formatCurrency(data.totals.payments)}</p>
+              <p className="mt-1 text-xs text-emerald-600">Pagos aplicados a la relación de gastos</p>
+            </div>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <p className="text-sm text-blue-700">{balanceLabel}</p>
+              <p className="mt-1 text-2xl font-bold text-blue-700">{formatCurrency(Math.abs(data.totals.balance))}</p>
+              <p className="mt-1 text-xs text-blue-600">Abonos menos gastos pendientes</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <TrendingDown className="h-4 w-4 text-red-500" />
+            Gastos pagados por el administrador
+          </CardTitle>
+          <CardDescription>{data.pendingExpenses.length} gastos pendientes de reembolso</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-hidden rounded-xl border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Propiedad</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Categoría</TableHead>
+                  <TableHead className="text-right">Monto</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.pendingExpenses.map(expense => (
+                  <TableRow key={expense.id}>
+                    <TableCell className="font-medium">{expense.description}</TableCell>
+                    <TableCell>{expense.property.title}</TableCell>
+                    <TableCell>{new Date(expense.date).toLocaleDateString('es-PA')}</TableCell>
+                    <TableCell><Badge variant="outline">{categoryLabels[expense.category] || expense.category}</Badge></TableCell>
+                    <TableCell className="text-right font-semibold text-red-600">{formatCurrency(expense.amount)}</TableCell>
+                  </TableRow>
+                ))}
+                {!data.pendingExpenses.length && (
+                  <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No hay gastos pendientes.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <TrendingUp className="h-4 w-4 text-emerald-500" />
+            Abonos del propietario
+          </CardTitle>
+          <CardDescription>{data.ownerPayments.length} abonos registrados</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-hidden rounded-xl border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Propiedad</TableHead>
+                  <TableHead>Método</TableHead>
+                  <TableHead>Referencia</TableHead>
+                  <TableHead>Notas</TableHead>
+                  <TableHead className="text-right">Monto</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.ownerPayments.map(payment => (
+                  <TableRow key={payment.id}>
+                    <TableCell>{new Date(payment.date).toLocaleDateString('es-PA')}</TableCell>
+                    <TableCell>{payment.property?.title || 'Sin propiedad'}</TableCell>
+                    <TableCell>{payment.method || 'No indicado'}</TableCell>
+                    <TableCell>{payment.reference || '-'}</TableCell>
+                    <TableCell className="max-w-[260px] whitespace-normal">{payment.notes || '-'}</TableCell>
+                    <TableCell className="text-right font-semibold text-emerald-600">{formatCurrency(payment.amount)}</TableCell>
+                  </TableRow>
+                ))}
+                {!data.ownerPayments.length && (
+                  <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No hay abonos registrados.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
