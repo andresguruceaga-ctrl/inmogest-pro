@@ -17,7 +17,7 @@ type ReferenceProperty = { id: string; title: string; address: string; owner?: {
 type ImportPreview = {
   success: boolean
   canImport: boolean
-  summary: { expenses: number; tenantPayments: number; ownerPayments: number; total: number }
+  summary: { expenses: number; tenantPayments: number; ownerPayments: number; total: number; skipped: number; recognized: number }
   issues: Array<{ sheet: string; row: number; message: string }>
   rows: Array<{ kind: string; sheet: string; row: number; label: string; amount: number }>
 }
@@ -60,16 +60,16 @@ export default function ImportarExcelPage() {
       const data = await response.json()
       if (!response.ok || (commit && !data.success)) throw new Error(data.error || 'No se pudo importar el archivo')
       if (commit) {
-        toast({ title: 'Importacion completada', description: `${data.imported.total} registros guardados.` })
+        toast({ title: 'Importación completada', description: `${data.imported.total} registros nuevos guardados y ${data.imported.skipped} existentes omitidos.` })
         setFile(null)
         setPreview(null)
         if (fileInputRef.current) fileInputRef.current.value = ''
       } else {
         setPreview(data)
         toast({
-          title: data.canImport ? 'Archivo listo para importar' : 'Revise los errores encontrados',
-          description: `${data.summary?.total || 0} filas reconocidas.`,
-          variant: data.canImport ? 'default' : 'destructive',
+          title: data.canImport ? 'Archivo listo para importar' : data.issues?.length ? 'Revise los errores encontrados' : 'No hay registros nuevos',
+          description: `${data.summary?.total || 0} nuevos y ${data.summary?.skipped || 0} existentes omitidos.`,
+          variant: data.issues?.length ? 'destructive' : 'default',
         })
       }
     } catch (error) {
@@ -95,16 +95,16 @@ export default function ImportarExcelPage() {
               <Card className="rounded-2xl border-0 shadow-sm">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5 text-[#126b73]" />Carga guiada</CardTitle>
-                  <CardDescription>La aplicacion valida todas las filas antes de guardar. Si una fila tiene errores, no se importa ningun registro.</CardDescription>
+                  <CardDescription>La aplicación valida todas las filas antes de guardar. Los registros existentes se omiten y solo se importan los nuevos.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                  <a href="/plantillas/plantilla-importacion-financiera.xlsx" download>
-                    <Button variant="outline" className="w-full sm:w-auto"><Download className="mr-2 h-4 w-4" />Descargar plantilla Excel</Button>
+                  <a href="/api/imports/finance/template" download>
+                    <Button variant="outline" className="w-full sm:w-auto"><Download className="mr-2 h-4 w-4" />Descargar Excel con todos los registros</Button>
                   </a>
                   <div className="rounded-xl border-2 border-dashed border-[#126b73]/25 bg-white p-8 text-center">
                     <Upload className="mx-auto mb-3 h-9 w-9 text-[#126b73]" />
                     <input ref={fileInputRef} type="file" accept=".xlsx" className="mx-auto block max-w-full text-sm" onChange={event => { setFile(event.target.files?.[0] || null); setPreview(null) }} />
-                    <p className="mt-2 text-xs text-muted-foreground">Formato .xlsx, máximo 5 MB y 196 filas por hoja.</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Formato .xlsx, máximo 5 MB. Añada los registros nuevos al final de cada hoja.</p>
                   </div>
                   <Button onClick={() => submitWorkbook(false)} disabled={!file || processing} className="bg-[#126b73] hover:bg-[#0f5960]">
                     {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
@@ -122,16 +122,17 @@ export default function ImportarExcelPage() {
                         <div className="rounded-xl bg-rose-50 p-3"><p className="text-xs text-muted-foreground">Gastos</p><p className="text-2xl font-bold">{preview.summary.expenses}</p></div>
                         <div className="rounded-xl bg-blue-50 p-3"><p className="text-xs text-muted-foreground">Pagos inquilinos</p><p className="text-2xl font-bold">{preview.summary.tenantPayments}</p></div>
                         <div className="rounded-xl bg-amber-50 p-3"><p className="text-xs text-muted-foreground">Pagos propietario</p><p className="text-2xl font-bold">{preview.summary.ownerPayments}</p></div>
-                        <div className="rounded-xl bg-emerald-50 p-3"><p className="text-xs text-muted-foreground">Total</p><p className="text-2xl font-bold">{preview.summary.total}</p></div>
+                        <div className="rounded-xl bg-emerald-50 p-3"><p className="text-xs text-muted-foreground">Nuevos</p><p className="text-2xl font-bold">{preview.summary.total}</p></div>
                       </div>
+                      {preview.summary.skipped > 0 && <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">{preview.summary.skipped} registros existentes o repetidos serán omitidos.</div>}
                       {preview.issues.length ? (
                         <div className="max-h-64 space-y-2 overflow-auto rounded-xl border border-red-200 bg-red-50 p-3">
                           {preview.issues.map((issue, index) => <div key={`${issue.sheet}-${issue.row}-${index}`} className="flex gap-2 text-sm text-red-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{issue.sheet}{issue.row ? `, fila ${issue.row}` : ''}: {issue.message}</span></div>)}
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800"><CheckCircle2 className="h-5 w-5" />El archivo esta listo para guardar.</div>
+                        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800"><CheckCircle2 className="h-5 w-5" />{preview.summary.total > 0 ? 'El archivo está listo para guardar.' : 'No se encontraron registros nuevos.'}</div>
                       )}
-                      <Button onClick={() => submitWorkbook(true)} disabled={!preview.canImport || processing} className="w-full bg-emerald-600 hover:bg-emerald-700">Confirmar e importar {preview.summary.total} registros</Button>
+                      <Button onClick={() => submitWorkbook(true)} disabled={!preview.canImport || processing} className="w-full bg-emerald-600 hover:bg-emerald-700">Confirmar e importar {preview.summary.total} registros nuevos</Button>
                     </>
                   )}
                 </CardContent>

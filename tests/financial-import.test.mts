@@ -2,7 +2,15 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import ExcelJS from 'exceljs'
-import { parseExcelDate, parseFinancialWorkbook, parseImportBoolean } from '../src/lib/financial-import.ts'
+import {
+  buildFinancialWorkbook,
+  financialImportFingerprint,
+  parseExcelDate,
+  parseFinancialWorkbook,
+  parseImportBoolean,
+  partitionFinancialImportRows,
+  type ParsedImportRow,
+} from '../src/lib/financial-import.ts'
 
 test('normaliza fechas de Excel y valores SI/NO', () => {
   const date = parseExcelDate('31/08/2026')
@@ -55,4 +63,48 @@ test('la plantilla publicada es compatible con el importador', async () => {
   const result = await parseFinancialWorkbook(await readFile(file))
 
   assert.deepEqual(result, { rows: [], issues: [] })
+})
+
+test('genera un Excel con todos los registros actuales y sus identificadores', async () => {
+  const buffer = await buildFinancialWorkbook({
+    expenses: [{
+      id: 'expense-1', propertyId: 'property-1', propertyName: 'Colores de Bella Vista', title: 'Mantenimiento',
+      description: null, category: 'MANTENIMIENTO_PH', expenseType: 'FIJO', amount: 180,
+      expenseDate: new Date(2026, 8, 5), invoiceNumber: null, invoiceDate: null, supplier: null,
+      paidByAdmin: true, reimbursedByOwner: false,
+    }],
+    tenantPayments: [{
+      id: 'payment-1', propertyId: 'property-2', propertyName: 'PH Quartier', userId: 'tenant-1', tenantName: 'Inquilino',
+      contractId: 'contract-1', paymentType: 'ALQUILER', amount: 1600, referenceNumber: 'TRX-1',
+      paymentMethod: 'TRANSFERENCIA', status: 'PAGADO', dueDate: new Date(2026, 8, 1), paidAt: new Date(2026, 8, 2),
+    }],
+    ownerPayments: [{
+      id: 'owner-payment-1', ownerId: 'owner-1', ownerName: 'Propietario', propertyId: 'property-1',
+      propertyName: 'Colores de Bella Vista', amount: 100, paymentDate: new Date(2026, 8, 10),
+      paymentMethod: 'TRANSFERENCIA', referenceNumber: 'OWN-1', notes: 'Abono',
+    }],
+  })
+
+  const result = await parseFinancialWorkbook(buffer)
+  assert.deepEqual(result.issues, [])
+  assert.deepEqual(result.rows.map(row => row.data.recordId), ['expense-1', 'payment-1', 'owner-payment-1'])
+})
+
+test('omite registros existentes y filas repetidas, dejando solo los nuevos', () => {
+  const existing: ParsedImportRow = {
+    kind: 'expense', sheet: 'Gastos', row: 5,
+    data: { recordId: 'expense-1', propertyId: 'property-1', title: 'Mantenimiento', category: 'MANTENIMIENTO_PH', expenseType: 'FIJO', amount: 180, expenseDate: new Date(2026, 8, 5), invoiceNumber: null, supplier: null },
+  }
+  const newRow: ParsedImportRow = {
+    kind: 'expense', sheet: 'Gastos', row: 6,
+    data: { recordId: null, propertyId: 'property-1', title: 'Plomería', category: 'REPARACION', expenseType: 'VARIABLE', amount: 75, expenseDate: new Date(2026, 8, 20), invoiceNumber: 'FAC-NEW', supplier: 'Proveedor' },
+  }
+  const result = partitionFinancialImportRows([existing, newRow, { ...newRow, row: 7 }], {
+    recordKeys: new Set(['expense|expense-1']),
+    referenceKeys: new Set(),
+    fingerprints: new Set([financialImportFingerprint(existing.kind, existing.data)]),
+  })
+
+  assert.equal(result.skipped, 2)
+  assert.deepEqual(result.newRows, [newRow])
 })

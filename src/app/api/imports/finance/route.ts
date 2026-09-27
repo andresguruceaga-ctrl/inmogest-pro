@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/api-auth'
 import { db } from '@/lib/db'
-import { parseFinancialWorkbook, type ImportIssue, type ParsedImportRow } from '@/lib/financial-import'
+import {
+  financialImportFingerprint,
+  partitionFinancialImportRows,
+  parseFinancialWorkbook,
+  type ImportIssue,
+  type ParsedImportRow,
+} from '@/lib/financial-import'
 
 export const runtime = 'nodejs'
 
@@ -36,33 +42,43 @@ export async function POST(request: NextRequest) {
     const propertyMap = new Map(properties.map(property => [property.id, property]))
     const userMap = new Map(users.map(user => [user.id, user]))
     const contractMap = new Map(contracts.map(contract => [contract.id, contract]))
-    const seen = new Set<string>()
-
-    const invoiceNumbers = parsed.rows
-      .filter(row => row.kind === 'expense' && row.data.invoiceNumber)
-      .map(row => String(row.data.invoiceNumber))
-    const tenantReferences = parsed.rows
-      .filter(row => row.kind === 'tenantPayment' && row.data.referenceNumber)
-      .map(row => String(row.data.referenceNumber))
-    const ownerReferences = parsed.rows
-      .filter(row => row.kind === 'ownerPayment' && row.data.referenceNumber)
-      .map(row => String(row.data.referenceNumber))
     const [existingExpenses, existingTenantPayments, existingOwnerPayments] = await Promise.all([
-      invoiceNumbers.length
-        ? db.expense.findMany({ where: { invoiceNumber: { in: invoiceNumbers } }, select: { propertyId: true, invoiceNumber: true } })
-        : [],
-      tenantReferences.length
-        ? db.payment.findMany({ where: { referenceNumber: { in: tenantReferences } }, select: { propertyId: true, userId: true, referenceNumber: true } })
-        : [],
-      ownerReferences.length
-        ? db.ownerPayment.findMany({ where: { referenceNumber: { in: ownerReferences } }, select: { ownerId: true, referenceNumber: true } })
-        : [],
+      db.expense.findMany({ select: {
+        id: true, propertyId: true, title: true, category: true, expenseType: true, amount: true,
+        expenseDate: true, invoiceNumber: true, supplier: true,
+      } }),
+      db.payment.findMany({ select: {
+        id: true, propertyId: true, userId: true, contractId: true, paymentType: true, amount: true,
+        referenceNumber: true, dueDate: true, paidAt: true, status: true,
+      } }),
+      db.ownerPayment.findMany({ select: {
+        id: true, ownerId: true, propertyId: true, amount: true, paymentDate: true, paymentMethod: true,
+        referenceNumber: true, notes: true,
+      } }),
     ])
-    const existingExpenseKeys = new Set(existingExpenses.map(expense => `${expense.propertyId}|${expense.invoiceNumber}`))
-    const existingTenantPaymentKeys = new Set(existingTenantPayments.map(payment => `${payment.propertyId}|${payment.userId}|${payment.referenceNumber}`))
-    const existingOwnerPaymentKeys = new Set(existingOwnerPayments.map(payment => `${payment.ownerId}|${payment.referenceNumber}`))
+    const existingRecordKeys = new Set([
+      ...existingExpenses.map(expense => `expense|${expense.id}`),
+      ...existingTenantPayments.map(payment => `tenantPayment|${payment.id}`),
+      ...existingOwnerPayments.map(payment => `ownerPayment|${payment.id}`),
+    ])
+    const existingFingerprints = new Set([
+      ...existingExpenses.map(expense => financialImportFingerprint('expense', expense)),
+      ...existingTenantPayments.map(payment => financialImportFingerprint('tenantPayment', payment)),
+      ...existingOwnerPayments.map(payment => financialImportFingerprint('ownerPayment', payment)),
+    ])
+    const existingReferenceKeys = new Set([
+      ...existingExpenses.filter(expense => expense.invoiceNumber).map(expense => `expense-ref|${expense.propertyId}|${expense.invoiceNumber}`),
+      ...existingTenantPayments.filter(payment => payment.referenceNumber).map(payment => `tenant-ref|${payment.propertyId}|${payment.userId}|${payment.referenceNumber}`),
+      ...existingOwnerPayments.filter(payment => payment.referenceNumber).map(payment => `owner-ref|${payment.ownerId}|${payment.referenceNumber}`),
+    ])
+    const partitioned = partitionFinancialImportRows(parsed.rows, {
+      recordKeys: existingRecordKeys,
+      referenceKeys: existingReferenceKeys,
+      fingerprints: existingFingerprints,
+    })
+    const newRows: ParsedImportRow[] = []
 
-    for (const row of parsed.rows) {
+    for (const row of partitioned.newRows) {
       const propertyId = String(row.data.propertyId || '')
       const property = propertyId ? propertyMap.get(propertyId) : null
       if (propertyId && !property) issues.push({ sheet: row.sheet, row: row.row, message: 'propertyId no existe' })
@@ -87,43 +103,31 @@ export async function POST(request: NextRequest) {
         if (property && property.ownerId !== ownerId) issues.push({ sheet: row.sheet, row: row.row, message: 'la propiedad no pertenece al propietario' })
       }
 
-      if (row.kind === 'expense' && row.data.invoiceNumber && existingExpenseKeys.has(`${propertyId}|${row.data.invoiceNumber}`)) {
-        issues.push({ sheet: row.sheet, row: row.row, message: 'ya existe un gasto con ese numero de factura para la propiedad' })
-      }
-      if (row.kind === 'tenantPayment' && row.data.referenceNumber && existingTenantPaymentKeys.has(`${propertyId}|${row.data.userId}|${row.data.referenceNumber}`)) {
-        issues.push({ sheet: row.sheet, row: row.row, message: 'ya existe un pago del inquilino con ese numero de referencia' })
-      }
-      if (row.kind === 'ownerPayment' && row.data.referenceNumber && existingOwnerPaymentKeys.has(`${row.data.ownerId}|${row.data.referenceNumber}`)) {
-        issues.push({ sheet: row.sheet, row: row.row, message: 'ya existe un pago del propietario con ese numero de referencia' })
-      }
-
-      const importDate = row.data.expenseDate || row.data.paymentDate || row.data.dueDate
-      const dateKey = importDate instanceof Date ? importDate.toISOString() : ''
-      const duplicateKey = `${row.kind}|${propertyId}|${row.data.userId || row.data.ownerId || ''}|${row.data.referenceNumber || row.data.invoiceNumber || ''}|${row.data.amount}|${dateKey}`
-      if (seen.has(duplicateKey)) issues.push({ sheet: row.sheet, row: row.row, message: 'fila duplicada dentro del archivo' })
-      seen.add(duplicateKey)
+      newRows.push(row)
     }
 
     const summary = {
-      expenses: parsed.rows.filter(row => row.kind === 'expense').length,
-      tenantPayments: parsed.rows.filter(row => row.kind === 'tenantPayment').length,
-      ownerPayments: parsed.rows.filter(row => row.kind === 'ownerPayment').length,
-      total: parsed.rows.length,
+      expenses: newRows.filter(row => row.kind === 'expense').length,
+      tenantPayments: newRows.filter(row => row.kind === 'tenantPayment').length,
+      ownerPayments: newRows.filter(row => row.kind === 'ownerPayment').length,
+      total: newRows.length,
+      skipped: partitioned.skipped,
+      recognized: parsed.rows.length,
     }
 
     if (issues.length || !commit) {
       return NextResponse.json({
         success: issues.length === 0,
         preview: true,
-        canImport: issues.length === 0 && parsed.rows.length > 0,
+        canImport: issues.length === 0 && newRows.length > 0,
         summary,
         issues,
-        rows: parsed.rows.slice(0, 100).map(row => ({ kind: row.kind, sheet: row.sheet, row: row.row, label: rowLabel(row), amount: row.data.amount })),
+        rows: newRows.slice(0, 100).map(row => ({ kind: row.kind, sheet: row.sheet, row: row.row, label: rowLabel(row), amount: row.data.amount })),
       }, { status: issues.length && commit ? 400 : 200 })
     }
 
     await db.$transaction(async transaction => {
-      for (const row of parsed.rows) {
+      for (const row of newRows) {
         if (row.kind === 'expense') {
           await transaction.expense.create({ data: {
             title: String(row.data.title), description: row.data.description as string | null,

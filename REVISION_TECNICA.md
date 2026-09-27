@@ -97,3 +97,13 @@ Los calculos de pagos y alquileres no se cambiaron; esta correccion se limita a 
 - Los filtros de propietario y propiedad también limitan esta relación sin mezclar pagos de otras propiedades.
 - La pestaña permite descargar un PDF propio con resumen, movimientos y balance final.
 - El informe financiero existente conserva su descarga separada.
+
+## Sexta fase completada
+
+### Exportación e importación incremental desde Excel
+
+- La descarga de Excel incluye todos los gastos, pagos de inquilinos y pagos de propietarios registrados en la base de datos.
+- Cada fila existente lleva un `registroId`; las filas nuevas deben dejarlo vacío.
+- Al analizar o importar, los registros existentes y las filas repetidas se omiten automáticamente.
+- La vista previa separa los registros nuevos de los omitidos y solo permite confirmar cuando hay filas nuevas válidas.
+- La detección también compara referencias y contenido financiero para evitar duplicados si se elimina accidentalmente el identificador.
