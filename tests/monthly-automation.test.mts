@@ -1,0 +1,93 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import {
+  fixedExpenseAutomationKey,
+  monthlyAutomationDates,
+  runMonthlyAutomation,
+  tenantPaymentAutomationKey,
+} from '../src/lib/monthly-automation.ts'
+import type { PrismaClient } from '@prisma/client'
+
+test('programa el alquiler para el día 7 y el gasto fijo para el día 30', () => {
+  const dates = monthlyAutomationDates(new Date('2026-10-30T15:00:00.000Z'))
+
+  assert.equal(dates.period, '2026-10')
+  assert.equal(dates.tenantPaymentDueDate.toISOString().slice(0, 10), '2026-10-07')
+  assert.equal(dates.fixedExpenseDate.toISOString().slice(0, 10), '2026-10-30')
+  assert.equal(dates.canCreateFixedExpenses, true)
+})
+
+test('en febrero usa el último día disponible', () => {
+  const beforeClosing = monthlyAutomationDates(new Date('2028-02-28T15:00:00.000Z'))
+  const atClosing = monthlyAutomationDates(new Date('2028-02-29T15:00:00.000Z'))
+
+  assert.equal(beforeClosing.fixedExpenseDate.toISOString().slice(0, 10), '2028-02-29')
+  assert.equal(beforeClosing.canCreateFixedExpenses, false)
+  assert.equal(atClosing.canCreateFixedExpenses, true)
+})
+
+test('las claves mensuales impiden duplicar cada registro automático', () => {
+  assert.equal(
+    fixedExpenseAutomationKey('expense-template-1', '2026-10'),
+    'fixed-expense:expense-template-1:2026-10'
+  )
+  assert.equal(
+    tenantPaymentAutomationKey('contract-1', '2026-10'),
+    'tenant-rent:contract-1:2026-10'
+  )
+})
+
+test('una segunda ejecución no duplica gastos ni pagos', async () => {
+  const paymentKeys = new Set<string>()
+  const expenseKeys = new Set<string>()
+  const fakePrisma = {
+    contract: {
+      findMany: async () => [{
+        id: 'contract-1',
+        contractNumber: 'ARR-1',
+        monthlyAmount: 1200,
+        propertyId: 'property-1',
+        tenantId: 'tenant-1',
+      }],
+    },
+    payment: {
+      findMany: async ({ where }: { where: { automationKey: { in: string[] } } }) =>
+        where.automationKey.in.filter(key => paymentKeys.has(key)).map(automationKey => ({ automationKey })),
+      create: async ({ data }: { data: { automationKey: string } }) => {
+        paymentKeys.add(data.automationKey)
+        return data
+      },
+    },
+    recurringExpense: {
+      findMany: async () => [{
+        id: 'recurring-1',
+        title: 'Mantenimiento',
+        description: null,
+        category: 'MANTENIMIENTO_PH',
+        amount: 150,
+        paidByAdmin: true,
+        propertyId: 'property-1',
+      }],
+    },
+    expense: {
+      findMany: async ({ where }: { where: { automationKey: { in: string[] } } }) =>
+        where.automationKey.in.filter(key => expenseKeys.has(key)).map(automationKey => ({ automationKey })),
+      create: async ({ data }: { data: { automationKey: string } }) => {
+        expenseKeys.add(data.automationKey)
+        return data
+      },
+    },
+  } as unknown as PrismaClient
+
+  const first = await runMonthlyAutomation(fakePrisma, new Date('2026-10-30T15:00:00.000Z'))
+  const second = await runMonthlyAutomation(fakePrisma, new Date('2026-10-30T15:00:00.000Z'))
+
+  assert.deepEqual(
+    { expenses: first.fixedExpensesCreated, payments: first.tenantPaymentsCreated },
+    { expenses: 1, payments: 1 }
+  )
+  assert.deepEqual(
+    { expenses: second.fixedExpensesCreated, payments: second.tenantPaymentsCreated },
+    { expenses: 0, payments: 0 }
+  )
+})

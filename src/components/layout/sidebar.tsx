@@ -25,7 +25,6 @@ import {
   Building,
   PanelLeft,
   Wallet,
-  FileSpreadsheet,
 } from 'lucide-react'
 import {
   Sidebar as ShadcnSidebar,
@@ -64,7 +63,6 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   User,
   TrendingUp,
   Wallet,
-  FileSpreadsheet,
 }
 
 interface NavItem {
@@ -82,7 +80,6 @@ const adminNavItems: NavItem[] = [
   { title: 'Pagos', href: '/pagos', icon: 'CreditCard' },
   { title: 'Gastos', href: '/gastos', icon: 'Receipt' },
   { title: 'Relación de Gastos', href: '/relacion-gastos', icon: 'Wallet' },
-  { title: 'Importar Excel', href: '/importar-excel', icon: 'FileSpreadsheet' },
   { title: 'Documentos', href: '/documentos', icon: 'FolderOpen' },
   { title: 'Reportes', href: '/reportes', icon: 'BarChart3' },
   { title: 'Soporte', href: '/soporte', icon: 'HelpCircle' },

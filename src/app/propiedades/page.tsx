@@ -69,6 +69,14 @@ interface PhotoPreview {
   url?: string
 }
 
+interface FixedExpenseDraft {
+  id: string
+  title: string
+  category: string
+  amount: string
+  paidByAdmin: boolean
+}
+
 const propertyTypes = [
   { value: 'APARTAMENTO', label: 'Apartamento' },
   { value: 'CASA', label: 'Casa' },
@@ -97,6 +105,17 @@ const statusOptions = [
   { value: 'OCUPADA', label: 'Ocupada' },
   { value: 'MANTENIMIENTO', label: 'Mantenimiento' },
   { value: 'INACTIVA', label: 'Inactiva' },
+]
+
+const expenseCategories = [
+  { value: 'MANTENIMIENTO_PH', label: 'Mantenimiento de PH' },
+  { value: 'SEGURO', label: 'Seguro' },
+  { value: 'SERVICIOS_BASICOS', label: 'Servicios básicos' },
+  { value: 'IMPUESTOS', label: 'Impuestos' },
+  { value: 'COMISION_ADMIN', label: 'Comisión de administración' },
+  { value: 'REPARACION', label: 'Reparación' },
+  { value: 'SERVICIO_TECNICO', label: 'Servicio técnico' },
+  { value: 'OTROS', label: 'Otros' },
 ]
 
 export default function PropiedadesPage() {
@@ -207,6 +226,26 @@ export default function PropiedadesPage() {
   const [mainPhotoIndex, setMainPhotoIndex] = useState<number | null>(null)
   const [editPhotos, setEditPhotos] = useState<PhotoPreview[]>([])
   const [editMainPhotoIndex, setEditMainPhotoIndex] = useState<number | null>(null)
+  const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseDraft[]>([])
+
+  const addFixedExpense = () => {
+    setFixedExpenses(current => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        title: '',
+        category: 'MANTENIMIENTO_PH',
+        amount: '',
+        paidByAdmin: false,
+      },
+    ])
+  }
+
+  const updateFixedExpense = (id: string, patch: Partial<FixedExpenseDraft>) => {
+    setFixedExpenses(current => current.map(expense =>
+      expense.id === id ? { ...expense, ...patch } : expense
+    ))
+  }
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -671,6 +710,14 @@ export default function PropiedadesPage() {
           salePrice: parseFloat(formData.salePrice) || null,
           saleDescription: formData.saleDescription || null,
           forRent: formData.forRent,
+          fixedExpenses: fixedExpenses
+            .filter(expense => expense.title.trim() && Number(expense.amount) > 0)
+            .map(expense => ({
+              title: expense.title.trim(),
+              category: expense.category,
+              amount: Number(expense.amount),
+              paidByAdmin: expense.paidByAdmin,
+            })),
         }),
       })
 
@@ -736,6 +783,7 @@ export default function PropiedadesPage() {
     })
     setPhotos([])
     setMainPhotoIndex(null)
+    setFixedExpenses([])
   }
 
   const getStatusBadge = (status: string) => {
@@ -1086,6 +1134,91 @@ export default function PropiedadesPage() {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* Gastos fijos mensuales */}
+            <div className="space-y-4 rounded-lg border p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h4 className="font-medium text-sm">Gastos fijos mensuales</h4>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Se registrarán automáticamente el día 30 de cada mes (o el último día de febrero), sin ITBMS.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addFixedExpense}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agregar gasto fijo
+                </Button>
+              </div>
+
+              {fixedExpenses.length === 0 ? (
+                <p className="text-sm text-muted-foreground rounded-md bg-muted/50 p-3">
+                  Puedes agregar mantenimiento, seguro, servicios u otros gastos que se repitan cada mes.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {fixedExpenses.map((expense, index) => (
+                    <div key={expense.id} className="grid grid-cols-1 gap-3 rounded-md bg-muted/40 p-3 md:grid-cols-12 md:items-end">
+                      <div className="space-y-2 md:col-span-4">
+                        <Label htmlFor={`fixed-expense-title-${expense.id}`}>Gasto {index + 1}</Label>
+                        <Input
+                          id={`fixed-expense-title-${expense.id}`}
+                          value={expense.title}
+                          onChange={(event) => updateFixedExpense(expense.id, { title: event.target.value })}
+                          placeholder="Ej. Mantenimiento del PH"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-3">
+                        <Label>Categoría</Label>
+                        <Select
+                          value={expense.category}
+                          onValueChange={(value) => updateFixedExpense(expense.id, { category: value })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {expenseCategories.map(category => (
+                              <SelectItem key={category.value} value={category.value}>{category.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor={`fixed-expense-amount-${expense.id}`}>Monto (USD)</Label>
+                        <Input
+                          id={`fixed-expense-amount-${expense.id}`}
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={expense.amount}
+                          onChange={(event) => updateFixedExpense(expense.id, { amount: event.target.value })}
+                          placeholder="0.00"
+                          required
+                        />
+                      </div>
+                      <label className="flex min-h-10 items-center gap-2 text-sm md:col-span-2">
+                        <input
+                          type="checkbox"
+                          checked={expense.paidByAdmin}
+                          onChange={(event) => updateFixedExpense(expense.id, { paidByAdmin: event.target.checked })}
+                          className="rounded border-gray-300"
+                        />
+                        Lo paga el administrador
+                      </label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="md:col-span-1"
+                        onClick={() => setFixedExpenses(current => current.filter(item => item.id !== expense.id))}
+                        aria-label={`Eliminar gasto fijo ${index + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Fotos */}

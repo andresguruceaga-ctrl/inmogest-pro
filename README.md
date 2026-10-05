@@ -98,6 +98,14 @@ DATABASE_URL="postgresql://postgres:[PASSWORD]@[HOST].railway.app:[PORT]/railway
 DIRECT_URL="postgresql://postgres:[PASSWORD]@[HOST].railway.app:[PORT]/railway"
 ```
 
+Para la automatización mensual configura también un secreto largo en producción:
+
+```env
+CRON_SECRET="un-valor-seguro-y-aleatorio"
+```
+
+Antes de publicar esta versión, aplica la migración con `prisma migrate deploy`.
+
 #### Opción 3: Neon
 
 ```env

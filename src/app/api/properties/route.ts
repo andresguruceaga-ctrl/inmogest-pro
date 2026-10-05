@@ -37,6 +37,22 @@ const createPropertySchema = z.object({
   salePrice: z.number().min(0).nullable().optional(),
   saleDescription: z.string().optional().nullable(),
   forRent: z.boolean().default(true),
+  fixedExpenses: z.array(z.object({
+    title: z.string().min(1, 'El nombre del gasto fijo es requerido'),
+    description: z.string().optional().nullable(),
+    category: z.enum([
+      'MANTENIMIENTO_PH',
+      'SEGURO',
+      'SERVICIOS_BASICOS',
+      'REPARACION',
+      'SERVICIO_TECNICO',
+      'IMPUESTOS',
+      'COMISION_ADMIN',
+      'OTROS',
+    ]),
+    amount: z.number().positive('El monto del gasto fijo debe ser mayor que cero'),
+    paidByAdmin: z.boolean().default(false),
+  })).default([]),
 });
 
 // GET - Listar propiedades
@@ -95,6 +111,10 @@ export async function GET(request: NextRequest) {
             email: true,
             phone: true,
           },
+        },
+        recurringExpenses: {
+          where: { isActive: true },
+          orderBy: { createdAt: 'asc' },
         },
         _count: {
           select: {
@@ -218,6 +238,15 @@ export async function POST(request: NextRequest) {
         salePrice: validatedData.salePrice ?? null,
         saleDescription: validatedData.saleDescription ?? null,
         forRent: validatedData.forRent ?? true,
+        recurringExpenses: {
+          create: validatedData.fixedExpenses.map(expense => ({
+            title: expense.title,
+            description: expense.description ?? null,
+            category: expense.category,
+            amount: expense.amount,
+            paidByAdmin: expense.paidByAdmin,
+          })),
+        },
       },
       include: {
         owner: {
@@ -243,6 +272,10 @@ export async function POST(request: NextRequest) {
             email: true,
             phone: true,
           },
+        },
+        recurringExpenses: {
+          where: { isActive: true },
+          orderBy: { createdAt: 'asc' },
         },
       },
     });

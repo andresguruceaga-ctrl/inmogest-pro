@@ -105,6 +105,10 @@ export async function GET(
           orderBy: { expenseDate: 'desc' },
           take: 10,
         },
+        recurringExpenses: {
+          where: { isActive: true },
+          orderBy: { createdAt: 'asc' },
+        },
         supportTickets: {
           orderBy: { createdAt: 'desc' },
           take: 5,
