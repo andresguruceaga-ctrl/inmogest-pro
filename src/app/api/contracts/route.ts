@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
 import { requireApiUser } from '@/lib/api-auth';
+import { backfillContractRecords } from '@/lib/contract-backfill';
+
+const recurringSupportSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  priority: z.enum(['BAJA', 'MEDIA', 'ALTA', 'URGENTE']).default('MEDIA'),
+  responsibleParty: z.enum(['INQUILINO', 'PROPIETARIO', 'ADMINISTRADOR']),
+  frequencyMonths: z.number().int().min(1).max(60),
+  firstDate: z.string().min(1),
+});
 
 // Esquema de validación para crear contrato
 const createContractSchema = z.object({
@@ -17,6 +28,7 @@ const createContractSchema = z.object({
   propertyId: z.string().min(1, 'La propiedad es requerida'),
   ownerId: z.string().min(1, 'El propietario es requerido'),
   tenantId: z.string().optional().nullable(),
+  recurringSupports: z.array(recurringSupportSchema).default([]),
 });
 
 // GET - Listar contratos
@@ -230,6 +242,9 @@ export async function POST(request: NextRequest) {
         propertyId: validatedData.propertyId,
         ownerId: validatedData.ownerId,
         tenantId: validatedData.tenantId ?? null,
+        recurringSupports: validatedData.recurringSupports.length
+          ? JSON.stringify(validatedData.recurringSupports)
+          : null,
       },
       include: {
         property: {
@@ -267,6 +282,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const generated = await backfillContractRecords(prisma, contract.id);
+
     console.log('Contract created successfully:', contract.id);
 
     return NextResponse.json(
@@ -274,6 +291,7 @@ export async function POST(request: NextRequest) {
         success: true,
         data: contract,
         message: 'Contrato creado exitosamente',
+        generated,
       },
       { status: 201 }
     );

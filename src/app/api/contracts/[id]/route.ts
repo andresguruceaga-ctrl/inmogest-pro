@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
 import { requireApiUser } from '@/lib/api-auth';
+import { backfillContractRecords } from '@/lib/contract-backfill';
+
+const recurringSupportSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  priority: z.enum(['BAJA', 'MEDIA', 'ALTA', 'URGENTE']).default('MEDIA'),
+  responsibleParty: z.enum(['INQUILINO', 'PROPIETARIO', 'ADMINISTRADOR']),
+  frequencyMonths: z.number().int().min(1).max(60),
+  firstDate: z.string().min(1),
+});
 
 // Esquema de validación para actualizar contrato
 const updateContractSchema = z.object({
@@ -16,6 +27,7 @@ const updateContractSchema = z.object({
   attachments: z.string().optional().nullable(), // JSON string con array de archivos adjuntos
   status: z.string().optional(),
   tenantId: z.string().optional().nullable(),
+  recurringSupports: z.array(recurringSupportSchema).optional(),
 });
 
 // GET - Obtener contrato por ID
@@ -210,11 +222,17 @@ export async function PUT(
       updateData.tenantId = validatedData.tenantId || null;
     }
 
-    // Validar fechas si ambas están presentes
-    const startDate = updateData.startDate as Date | undefined;
-    const endDate = updateData.endDate as Date | undefined;
+    if (validatedData.recurringSupports !== undefined) {
+      updateData.recurringSupports = validatedData.recurringSupports.length
+        ? JSON.stringify(validatedData.recurringSupports)
+        : null;
+    }
 
-    if (startDate && endDate && startDate >= endDate) {
+    // Validar fechas si ambas están presentes
+    const startDate = (updateData.startDate as Date | undefined) ?? existingContract.startDate;
+    const endDate = (updateData.endDate as Date | undefined) ?? existingContract.endDate;
+
+    if (startDate >= endDate) {
       return NextResponse.json(
         {
           success: false,
@@ -253,12 +271,15 @@ export async function PUT(
       },
     });
 
+    const generated = await backfillContractRecords(prisma, contract.id);
+
     console.log('Contract updated successfully:', contract.id);
 
     return NextResponse.json({
       success: true,
       data: contract,
       message: 'Contrato actualizado exitosamente',
+      generated,
     });
   } catch (error) {
     console.error('Error al actualizar contrato:', error);

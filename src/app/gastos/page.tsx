@@ -188,7 +188,7 @@ export default function GastosPage() {
         toast({
           title: 'Gasto registrado',
           description: formData.paidByAdmin 
-            ? 'El gasto se ha registrado como pagado por el administrador. Aparecera en Relacion de Gastos.'
+            ? 'El gasto se ha registrado como gestionado por el administrador. Aparecerá en Relación de Gastos.'
             : 'El gasto se ha registrado exitosamente.',
         })
         setDialogOpen(false)
@@ -723,10 +723,10 @@ export default function GastosPage() {
                 />
                 <div>
                   <Label htmlFor="paidByAdmin" className="font-medium cursor-pointer">
-                    Gasto pagado por el Administrador
+                    Gestionado por el administrador
                   </Label>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Marca esta opcion si el gasto fue pagado por la administracion y el propietario debe reembolsarlo. 
+                    Marca esta opción si el gasto es gestionado por la administración y el propietario debe reembolsarlo.
                     Aparecera en la seccion de "Relacion de Gastos".
                   </p>
                 </div>
@@ -954,7 +954,7 @@ export default function GastosPage() {
                 />
                 <div>
                   <Label htmlFor="edit-paidByAdmin" className="font-medium cursor-pointer">
-                    Gasto pagado por el Administrador
+                    Gestionado por el administrador
                   </Label>
                   <p className="text-sm text-muted-foreground mt-1">
                     Si esta marcado, el gasto aparecera en "Relacion de Gastos" como pendiente de reembolso.

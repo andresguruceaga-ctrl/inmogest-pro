@@ -1244,7 +1244,7 @@ export default function PropiedadesPage() {
                           onChange={(event) => updateFixedExpense(expense.id, { paidByAdmin: event.target.checked })}
                           className="rounded border-gray-300"
                         />
-                        Lo paga el administrador
+                        Gestionado por el administrador
                       </label>
                       </div>
                     </div>

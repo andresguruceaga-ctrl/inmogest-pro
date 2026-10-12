@@ -65,6 +65,16 @@ interface TenantUser {
   role: string
 }
 
+interface RecurringSupportForm {
+  id: string
+  title: string
+  category: string
+  priority: 'BAJA' | 'MEDIA' | 'ALTA' | 'URGENTE'
+  responsibleParty: 'INQUILINO' | 'PROPIETARIO' | 'ADMINISTRADOR'
+  frequencyMonths: number
+  firstDate: string
+}
+
 const CONTRACT_TYPES = ['ARRENDAMIENTO', 'ADMINISTRACION'] as const
 const CONTRACT_STATUSES = ['VIGENTE', 'VENCIDO', 'CANCELADO', 'RENOVADO'] as const
 
@@ -106,6 +116,7 @@ export default function ContratosPage() {
   // File upload state
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(false)
+  const [recurringSupports, setRecurringSupports] = useState<RecurringSupportForm[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editFileInputRef = useRef<HTMLInputElement>(null)
 
@@ -388,6 +399,7 @@ export default function ContratosPage() {
           ownerId: selectedProperty.ownerId,
           tenantId: formData.tenantId || null,
           attachments: attachments.length > 0 ? JSON.stringify(attachments) : null,
+          recurringSupports: recurringSupports.map(({ id: _id, ...support }) => support),
         }),
       })
 
@@ -677,6 +689,23 @@ export default function ContratosPage() {
       tenantId: '',
     })
     setAttachments([])
+    setRecurringSupports([])
+  }
+
+  const addRecurringSupport = () => {
+    setRecurringSupports(current => [...current, {
+      id: `${Date.now()}-${current.length}`,
+      title: '',
+      category: 'Mantenimiento',
+      priority: 'MEDIA',
+      responsibleParty: formData.contractType === 'ARRENDAMIENTO' ? 'INQUILINO' : 'PROPIETARIO',
+      frequencyMonths: 4,
+      firstDate: formData.startDate,
+    }])
+  }
+
+  const updateRecurringSupport = (id: string, changes: Partial<RecurringSupportForm>) => {
+    setRecurringSupports(current => current.map(item => item.id === id ? { ...item, ...changes } : item))
   }
 
   const formatDate = (dateStr: string) => {
@@ -862,7 +891,7 @@ export default function ContratosPage() {
 
       {/* Dialog para Nuevo Contrato */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nuevo Contrato</DialogTitle>
             <DialogDescription>
@@ -972,6 +1001,82 @@ export default function ContratosPage() {
                 onChange={(e) => setFormData({...formData, terms: e.target.value})}
                 placeholder="Condiciones del contrato..."
               />
+            </div>
+
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <Label>Soportes recurrentes</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Se crearán automáticamente en Soporte según la frecuencia indicada.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addRecurringSupport}>
+                  <Plus className="mr-2 h-4 w-4" /> Agregar soporte
+                </Button>
+              </div>
+              {recurringSupports.map((support, index) => (
+                <div key={support.id} className="space-y-3 rounded-lg bg-muted/40 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Soporte {index + 1}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setRecurringSupports(current => current.filter(item => item.id !== support.id))}
+                      aria-label={`Eliminar soporte ${index + 1}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor={`support-title-${support.id}`}>Actividad *</Label>
+                      <Input
+                        id={`support-title-${support.id}`}
+                        value={support.title}
+                        onChange={(event) => updateRecurringSupport(support.id, { title: event.target.value })}
+                        placeholder="Ej: Mantenimiento de A/A"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`support-first-${support.id}`}>Primera fecha *</Label>
+                      <Input
+                        id={`support-first-${support.id}`}
+                        type="date"
+                        value={support.firstDate}
+                        onChange={(event) => updateRecurringSupport(support.id, { firstDate: event.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Frecuencia</Label>
+                      <Select value={String(support.frequencyMonths)} onValueChange={(value) => updateRecurringSupport(support.id, { frequencyMonths: Number(value) })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Mensual</SelectItem>
+                          <SelectItem value="3">Trimestral</SelectItem>
+                          <SelectItem value="4">Cada 4 meses</SelectItem>
+                          <SelectItem value="6">Semestral</SelectItem>
+                          <SelectItem value="12">Anual</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Responsable</Label>
+                      <Select value={support.responsibleParty} onValueChange={(value) => updateRecurringSupport(support.id, { responsibleParty: value as RecurringSupportForm['responsibleParty'] })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="INQUILINO">Inquilino</SelectItem>
+                          <SelectItem value="PROPIETARIO">Propietario</SelectItem>
+                          <SelectItem value="ADMINISTRADOR">Administrador</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Sección de Archivos Adjuntos */}

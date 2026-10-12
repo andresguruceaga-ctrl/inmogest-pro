@@ -13,6 +13,7 @@ export interface MonthlyAutomationResult {
   fixedExpensesCreated: number
   tenantPaymentsCreated: number
   fixedExpensesPendingUntil: string | null
+  supportTicketsCreated: number
 }
 
 function datePartsInPanama(now: Date): CalendarDate {
@@ -77,6 +78,7 @@ export async function runMonthlyAutomation(
   const dates = monthlyAutomationDates(now)
   let fixedExpensesCreated = 0
   let tenantPaymentsCreated = 0
+  let supportTicketsCreated = 0
 
   const contracts = await prisma.contract.findMany({
     where: {
@@ -193,10 +195,32 @@ export async function runMonthlyAutomation(
     }
   }
 
+  // Completa soportes recurrentes y cualquier período retroactivo pendiente.
+  // La comprobación mantiene compatibles los dobles de prueba mínimos.
+  if (typeof prisma.contract.findUnique === 'function') {
+    const { backfillContractRecords } = await import('./contract-backfill')
+    const activeContracts = await prisma.contract.findMany({
+      where: {
+        status: 'VIGENTE',
+        startDate: { lte: dates.monthEnd },
+        endDate: { gte: dates.monthStart },
+        property: { isActive: true },
+      },
+      select: { id: true },
+    })
+    for (const contract of activeContracts) {
+      const generated = await backfillContractRecords(prisma, contract.id, now)
+      supportTicketsCreated += generated.supportTicketsCreated
+      tenantPaymentsCreated += generated.paymentsCreated
+      fixedExpensesCreated += generated.expensesCreated
+    }
+  }
+
   return {
     period: dates.period,
     fixedExpensesCreated,
     tenantPaymentsCreated,
+    supportTicketsCreated,
     fixedExpensesPendingUntil: dates.canCreateFixedExpenses
       ? null
       : dates.fixedExpenseDate.toISOString().slice(0, 10),

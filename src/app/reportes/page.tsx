@@ -1426,7 +1426,7 @@ function OwnerBalanceReport({
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <TrendingDown className="h-4 w-4 text-red-500" />
-            Gastos pagados por el administrador
+            Gastos gestionados por el administrador
           </CardTitle>
           <CardDescription>{data.pendingExpenses.length} gastos pendientes de reembolso</CardDescription>
         </CardHeader>

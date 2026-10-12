@@ -719,7 +719,7 @@ export function generateReportPDF(params: ReportPDFParams): jsPDF {
       doc.setTextColor(185, 28, 28)
       doc.setFontSize(9)
       doc.setFont('helvetica', 'bold')
-      doc.text('GASTOS PENDIENTES DE REEMBOLSO (Pagados por Administrador)', margin + 3, yPosition + 5)
+      doc.text('GASTOS PENDIENTES DE REEMBOLSO (Gestionados por Administrador)', margin + 3, yPosition + 5)
       yPosition += 10
 
       doc.setFillColor(243, 244, 246)

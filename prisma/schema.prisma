@@ -89,27 +89,28 @@ model Property {
 }
 
 model Contract {
-  id             String         @id @default(cuid())
-  contractType   ContractType
-  contractNumber String         @unique
-  startDate      DateTime
-  endDate        DateTime
-  monthlyAmount  Float
-  itbmsAmount    Float
-  depositAmount  Float?
-  terms          String?
-  documentUrl    String?
-  attachments    String? // JSON string con array de archivos adjuntos
-  status         ContractStatus @default(VIGENTE)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  propertyId     String
-  ownerId        String
-  tenantId       String?
-  owner          User           @relation("OwnerContracts", fields: [ownerId], references: [id], onDelete: Cascade)
-  property       Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  tenant         User?          @relation("TenantContracts", fields: [tenantId], references: [id])
-  payments       Payment[]
+  id                String         @id @default(cuid())
+  contractType      ContractType
+  contractNumber    String         @unique
+  startDate         DateTime
+  endDate           DateTime
+  monthlyAmount     Float
+  itbmsAmount       Float
+  depositAmount     Float?
+  terms             String?
+  documentUrl       String?
+  attachments       String? // JSON string con array de archivos adjuntos
+  recurringSupports String? // JSON con mantenimientos/soportes programados del contrato
+  status            ContractStatus @default(VIGENTE)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  propertyId        String
+  ownerId           String
+  tenantId          String?
+  owner             User           @relation("OwnerContracts", fields: [ownerId], references: [id], onDelete: Cascade)
+  property          Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  tenant            User?          @relation("TenantContracts", fields: [tenantId], references: [id])
+  payments          Payment[]
 
   @@index([propertyId])
   @@index([ownerId])
@@ -152,48 +153,53 @@ model Expense {
 }
 
 model RecurringExpense {
-  id          String          @id @default(cuid())
-  title       String
-  description String?
-  category    ExpenseCategory
-  amount      Float
-  frequencyMonths Int         @default(1)
-  paidByAdmin Boolean         @default(false)
-  isActive    Boolean         @default(true)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  propertyId  String
-  property    Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  expenses    Expense[]
+  id              String          @id @default(cuid())
+  title           String
+  description     String?
+  category        ExpenseCategory
+  amount          Float
+  frequencyMonths Int             @default(1)
+  paidByAdmin     Boolean         @default(false)
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  propertyId      String
+  property        Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  expenses        Expense[]
 
   @@index([propertyId])
   @@index([isActive])
 }
 
 model SupportTicket {
-  id          String         @id @default(cuid())
-  title       String
-  description String
-  category    String?
-  status      TicketStatus   @default(ABIERTO)
-  priority    TicketPriority @default(MEDIA)
-  photos      String?
-  attachments String? // JSON string con array de archivos adjuntos
-  response    String?
-  respondedAt DateTime?
-  respondedBy String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  resolvedAt  DateTime?
-  propertyId  String
-  userId      String
-  property    Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String         @id @default(cuid())
+  title         String
+  description   String
+  category      String?
+  status        TicketStatus   @default(ABIERTO)
+  priority      TicketPriority @default(MEDIA)
+  photos        String?
+  attachments   String? // JSON string con array de archivos adjuntos
+  response      String?
+  respondedAt   DateTime?
+  respondedBy   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  resolvedAt    DateTime?
+  dueDate       DateTime?
+  contractId    String?
+  automationKey String?        @unique
+  propertyId    String
+  userId        String
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([propertyId])
   @@index([userId])
   @@index([status])
   @@index([priority])
+  @@index([contractId])
+  @@index([dueDate])
 }
 
 model Payment {
