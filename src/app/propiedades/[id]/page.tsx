@@ -103,7 +103,7 @@ export default function PropertyWorkspacePage() {
   return (
     <SidebarProvider>
       <Sidebar />
-      <SidebarInset className="flex min-h-screen min-w-0 flex-col">
+      <SidebarInset className="flex min-h-screen min-w-0 flex-col overflow-x-hidden">
         <Header />
         <main className="flex-1 p-4 md:p-6 lg:p-8">
           <div className="mx-auto max-w-7xl space-y-6">
