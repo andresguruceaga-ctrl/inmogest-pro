@@ -51,6 +51,13 @@ const createPropertySchema = z.object({
       'OTROS',
     ]),
     amount: z.number().positive('El monto del gasto fijo debe ser mayor que cero'),
+    frequencyMonths: z.union([
+      z.literal(1),
+      z.literal(3),
+      z.literal(4),
+      z.literal(6),
+      z.literal(12),
+    ]).default(1),
     paidByAdmin: z.boolean().default(false),
   })).default([]),
 });
@@ -244,6 +251,7 @@ export async function POST(request: NextRequest) {
             description: expense.description ?? null,
             category: expense.category,
             amount: expense.amount,
+            frequencyMonths: expense.frequencyMonths,
             paidByAdmin: expense.paidByAdmin,
           })),
         },

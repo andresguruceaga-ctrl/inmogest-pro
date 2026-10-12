@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   fixedExpenseAutomationKey,
+  isRecurringExpenseDue,
   monthlyAutomationDates,
   runMonthlyAutomation,
   tenantPaymentAutomationKey,
@@ -37,6 +38,17 @@ test('las claves mensuales impiden duplicar cada registro automático', () => {
   )
 })
 
+test('respeta frecuencias mensuales, trimestrales, cuatrimestrales, semestrales y anuales', () => {
+  const createdAt = new Date('2026-01-15T15:00:00.000Z')
+
+  assert.equal(isRecurringExpenseDue(createdAt, 1, { year: 2026, month: 2 }), true)
+  assert.equal(isRecurringExpenseDue(createdAt, 3, { year: 2026, month: 4 }), true)
+  assert.equal(isRecurringExpenseDue(createdAt, 4, { year: 2026, month: 5 }), true)
+  assert.equal(isRecurringExpenseDue(createdAt, 6, { year: 2026, month: 7 }), true)
+  assert.equal(isRecurringExpenseDue(createdAt, 12, { year: 2027, month: 1 }), true)
+  assert.equal(isRecurringExpenseDue(createdAt, 3, { year: 2026, month: 3 }), false)
+})
+
 test('una segunda ejecución no duplica gastos ni pagos', async () => {
   const paymentKeys = new Set<string>()
   const expenseKeys = new Set<string>()
@@ -65,8 +77,10 @@ test('una segunda ejecución no duplica gastos ni pagos', async () => {
         description: null,
         category: 'MANTENIMIENTO_PH',
         amount: 150,
+        frequencyMonths: 1,
         paidByAdmin: true,
         propertyId: 'property-1',
+        createdAt: new Date('2026-10-01T15:00:00.000Z'),
       }],
     },
     expense: {

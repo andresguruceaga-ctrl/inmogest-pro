@@ -56,6 +56,16 @@ export function fixedExpenseAutomationKey(recurringExpenseId: string, period: st
   return `fixed-expense:${recurringExpenseId}:${period}`
 }
 
+export function isRecurringExpenseDue(
+  createdAt: Date,
+  frequencyMonths: number,
+  current: Pick<CalendarDate, 'year' | 'month'>
+) {
+  const created = datePartsInPanama(createdAt)
+  const elapsedMonths = (current.year - created.year) * 12 + current.month - created.month
+  return elapsedMonths >= 0 && elapsedMonths % frequencyMonths === 0
+}
+
 export function tenantPaymentAutomationKey(contractId: string, period: string) {
   return `tenant-rent:${contractId}:${period}`
 }
@@ -132,11 +142,16 @@ export async function runMonthlyAutomation(
         description: true,
         category: true,
         amount: true,
+        frequencyMonths: true,
         paidByAdmin: true,
         propertyId: true,
+        createdAt: true,
       },
     })
-    const expenseKeys = recurringExpenses.map(expense =>
+    const dueRecurringExpenses = recurringExpenses.filter(expense =>
+      isRecurringExpenseDue(expense.createdAt, expense.frequencyMonths, dates.current)
+    )
+    const expenseKeys = dueRecurringExpenses.map(expense =>
       fixedExpenseAutomationKey(expense.id, dates.period)
     )
     const existingExpenses = expenseKeys.length
@@ -147,7 +162,7 @@ export async function runMonthlyAutomation(
       : []
     const existingExpenseKeys = new Set(existingExpenses.map(expense => expense.automationKey))
 
-    for (const recurring of recurringExpenses) {
+    for (const recurring of dueRecurringExpenses) {
       const automationKey = fixedExpenseAutomationKey(recurring.id, dates.period)
       if (existingExpenseKeys.has(automationKey)) continue
 

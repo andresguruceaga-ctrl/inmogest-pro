@@ -157,6 +157,7 @@ model RecurringExpense {
   description String?
   category    ExpenseCategory
   amount      Float
+  frequencyMonths Int         @default(1)
   paidByAdmin Boolean         @default(false)
   isActive    Boolean         @default(true)
   createdAt   DateTime        @default(now())

@@ -74,6 +74,7 @@ interface FixedExpenseDraft {
   title: string
   category: string
   amount: string
+  frequencyMonths: number
   paidByAdmin: boolean
 }
 
@@ -116,6 +117,14 @@ const expenseCategories = [
   { value: 'REPARACION', label: 'Reparación' },
   { value: 'SERVICIO_TECNICO', label: 'Servicio técnico' },
   { value: 'OTROS', label: 'Otros' },
+]
+
+const expenseFrequencies = [
+  { value: 1, label: 'Mensual' },
+  { value: 3, label: 'Trimestral' },
+  { value: 4, label: 'Cuatrimestral' },
+  { value: 6, label: 'Semestral' },
+  { value: 12, label: 'Anual' },
 ]
 
 export default function PropiedadesPage() {
@@ -236,6 +245,7 @@ export default function PropiedadesPage() {
         title: '',
         category: 'MANTENIMIENTO_PH',
         amount: '',
+        frequencyMonths: 1,
         paidByAdmin: false,
       },
     ])
@@ -716,6 +726,7 @@ export default function PropiedadesPage() {
               title: expense.title.trim(),
               category: expense.category,
               amount: Number(expense.amount),
+              frequencyMonths: expense.frequencyMonths,
               paidByAdmin: expense.paidByAdmin,
             })),
         }),
@@ -1136,13 +1147,13 @@ export default function PropiedadesPage() {
               </div>
             </div>
 
-            {/* Gastos fijos mensuales */}
+            {/* Gastos fijos recurrentes */}
             <div className="space-y-4 rounded-lg border p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h4 className="font-medium text-sm">Gastos fijos mensuales</h4>
+                  <h4 className="font-medium text-sm">Gastos fijos recurrentes</h4>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Se registrarán automáticamente el día 30 de cada mes (o el último día de febrero), sin ITBMS.
+                    Se registrarán automáticamente el día 30 del mes que corresponda según su frecuencia, sin ITBMS.
                   </p>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={addFixedExpense}>
@@ -1153,14 +1164,28 @@ export default function PropiedadesPage() {
 
               {fixedExpenses.length === 0 ? (
                 <p className="text-sm text-muted-foreground rounded-md bg-muted/50 p-3">
-                  Puedes agregar mantenimiento, seguro, servicios u otros gastos que se repitan cada mes.
+                  Puedes agregar mantenimiento, seguro, servicios u otros gastos recurrentes.
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {fixedExpenses.map((expense, index) => (
-                    <div key={expense.id} className="grid grid-cols-1 gap-3 rounded-md bg-muted/40 p-3 md:grid-cols-12 md:items-end">
-                      <div className="space-y-2 md:col-span-4">
-                        <Label htmlFor={`fixed-expense-title-${expense.id}`}>Gasto {index + 1}</Label>
+                    <div key={expense.id} className="space-y-4 rounded-lg border bg-muted/30 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold">Gasto {index + 1}</p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => setFixedExpenses(current => current.filter(item => item.id !== expense.id))}
+                          aria-label={`Eliminar gasto fijo ${index + 1}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor={`fixed-expense-title-${expense.id}`}>Nombre del gasto</Label>
                         <Input
                           id={`fixed-expense-title-${expense.id}`}
                           value={expense.title}
@@ -1169,7 +1194,7 @@ export default function PropiedadesPage() {
                           required
                         />
                       </div>
-                      <div className="space-y-2 md:col-span-3">
+                      <div className="space-y-2">
                         <Label>Categoría</Label>
                         <Select
                           value={expense.category}
@@ -1183,7 +1208,23 @@ export default function PropiedadesPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2 md:col-span-2">
+                      <div className="space-y-2">
+                        <Label>Frecuencia</Label>
+                        <Select
+                          value={String(expense.frequencyMonths)}
+                          onValueChange={(value) => updateFixedExpense(expense.id, { frequencyMonths: Number(value) })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {expenseFrequencies.map(frequency => (
+                              <SelectItem key={frequency.value} value={String(frequency.value)}>
+                                {frequency.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
                         <Label htmlFor={`fixed-expense-amount-${expense.id}`}>Monto (USD)</Label>
                         <Input
                           id={`fixed-expense-amount-${expense.id}`}
@@ -1196,7 +1237,7 @@ export default function PropiedadesPage() {
                           required
                         />
                       </div>
-                      <label className="flex min-h-10 items-center gap-2 text-sm md:col-span-2">
+                      <label className="flex min-h-10 items-center gap-3 rounded-md border bg-background px-3 py-2 text-sm">
                         <input
                           type="checkbox"
                           checked={expense.paidByAdmin}
@@ -1205,16 +1246,7 @@ export default function PropiedadesPage() {
                         />
                         Lo paga el administrador
                       </label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="md:col-span-1"
-                        onClick={() => setFixedExpenses(current => current.filter(item => item.id !== expense.id))}
-                        aria-label={`Eliminar gasto fijo ${index + 1}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
