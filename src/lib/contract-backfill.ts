@@ -206,7 +206,7 @@ export async function backfillContractRecords(
       const dueDate = dateInMonth(month, firstDate.getUTCDate())
       if (dueDate < contract.startDate || dueDate > rangeEnd || dueDate > now) continue
       const automationKey = recurringSupportAutomationKey(contract.id, index, monthPeriod(month))
-      const existing = await prisma.supportTicket.findUnique({ where: { automationKey } })
+      const existing = await prisma.supportTicket.findFirst({ where: { automationKey } })
       if (existing) continue
       await prisma.supportTicket.create({
         data: {

@@ -268,7 +268,7 @@ model SupportTicket {
   resolvedAt DateTime?
   dueDate DateTime?
   contractId String?
-  automationKey String? @unique
+  automationKey String?
 
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id])

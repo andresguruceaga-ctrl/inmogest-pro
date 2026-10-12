@@ -188,7 +188,7 @@ model SupportTicket {
   resolvedAt    DateTime?
   dueDate       DateTime?
   contractId    String?
-  automationKey String?        @unique
+  automationKey String?
   propertyId    String
   userId        String
   property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -200,6 +200,7 @@ model SupportTicket {
   @@index([priority])
   @@index([contractId])
   @@index([dueDate])
+  @@index([automationKey])
 }
 
 model Payment {
