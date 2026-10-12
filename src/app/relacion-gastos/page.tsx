@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { Footer } from '@/components/layout/footer'
@@ -67,6 +67,25 @@ interface BalanceData {
   }
 }
 
+interface AccountMovement {
+  id: string
+  type: 'GASTO' | 'PAGO'
+  date: string
+  description: string
+  category: string
+  amount: number
+  balance: number
+  payment?: PropertyBalance['ownerPayments'][number]
+}
+
+interface PropertyStatement extends PropertyBalance {
+  movements: AccountMovement[]
+  openingBalance: number
+  endingBalance: number
+  periodExpenses: number
+  periodPayments: number
+}
+
 // Interfaz para propiedades de un propietario (para el selector)
 interface OwnerProperties {
   ownerId: string
@@ -102,6 +121,9 @@ export default function RelacionGastosPage() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<BalanceData | null>(null)
   const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set())
+  const [startDateFilter, setStartDateFilter] = useState('')
+  const [endDateFilter, setEndDateFilter] = useState('')
+  const [propertyFilter, setPropertyFilter] = useState('ALL')
   
   // Payment dialog
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
@@ -148,6 +170,7 @@ export default function RelacionGastosPage() {
       
       if (result.success) {
         setData(result.data)
+        setExpandedProperties(new Set(result.data.properties.map((item: PropertyBalance) => item.property.id)))
       } else {
         toast({
           title: 'Error',
@@ -399,8 +422,69 @@ export default function RelacionGastosPage() {
     }).format(amount)
   }
 
+  const statements = useMemo<PropertyStatement[]>(() => {
+    if (!data) return []
+
+    return data.properties
+      .filter(item => propertyFilter === 'ALL' || item.property.id === propertyFilter)
+      .map(item => {
+        let balance = 0
+        const allMovements = [
+          ...item.pendingExpenses.map(expense => ({
+            id: expense.id,
+            type: 'GASTO' as const,
+            date: expense.date,
+            description: expense.description,
+            category: categoryLabels[expense.category] || expense.category,
+            amount: expense.amount,
+          })),
+          ...item.ownerPayments.map(payment => ({
+            id: payment.id,
+            type: 'PAGO' as const,
+            date: payment.date,
+            description: payment.notes || payment.reference || payment.method || 'Pago del propietario',
+            category: 'Pago del propietario',
+            amount: payment.amount,
+            payment,
+          })),
+        ].sort((a, b) => {
+          const difference = new Date(a.date).getTime() - new Date(b.date).getTime()
+          if (difference !== 0) return difference
+          if (a.type !== b.type) return a.type === 'GASTO' ? -1 : 1
+          return a.id.localeCompare(b.id)
+        }).map(movement => {
+          balance += movement.type === 'GASTO' ? movement.amount : -movement.amount
+          return { ...movement, balance }
+        })
+
+        const dateKey = (value: string) => new Date(value).toISOString().slice(0, 10)
+        const openingBalance = allMovements
+          .filter(movement => startDateFilter && dateKey(movement.date) < startDateFilter)
+          .reduce((sum, movement) => sum + (movement.type === 'GASTO' ? movement.amount : -movement.amount), 0)
+        const movements = allMovements.filter(movement => {
+          const date = dateKey(movement.date)
+          return (!startDateFilter || date >= startDateFilter) && (!endDateFilter || date <= endDateFilter)
+        })
+
+        return {
+          ...item,
+          movements,
+          openingBalance,
+          endingBalance: movements.length ? movements[movements.length - 1].balance : openingBalance,
+          periodExpenses: movements.filter(m => m.type === 'GASTO').reduce((sum, m) => sum + m.amount, 0),
+          periodPayments: movements.filter(m => m.type === 'PAGO').reduce((sum, m) => sum + m.amount, 0),
+        }
+      })
+  }, [data, propertyFilter, startDateFilter, endDateFilter])
+
+  const periodSummary = useMemo(() => ({
+    expenses: statements.reduce((sum, item) => sum + item.periodExpenses, 0),
+    payments: statements.reduce((sum, item) => sum + item.periodPayments, 0),
+    balance: statements.reduce((sum, item) => sum + item.endingBalance, 0),
+  }), [statements])
+
   // Agrupar propiedades por propietario para mostrar en la UI
-  const groupedByOwner = data?.properties.reduce((acc, propBalance) => {
+  const groupedByOwner = statements.reduce((acc, propBalance) => {
     const ownerId = propBalance.owner.id
     if (!acc[ownerId]) {
       acc[ownerId] = {
@@ -410,7 +494,7 @@ export default function RelacionGastosPage() {
     }
     acc[ownerId].properties.push(propBalance)
     return acc
-  }, {} as Record<string, { owner: PropertyBalance['owner']; properties: PropertyBalance[] }>)
+  }, {} as Record<string, { owner: PropertyBalance['owner']; properties: PropertyStatement[] }>)
 
   if (loading) {
     return (
@@ -442,6 +526,61 @@ export default function RelacionGastosPage() {
               </div>
             </div>
 
+            <Card>
+              <CardContent className="grid gap-4 pt-6 md:grid-cols-4">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Propiedad</Label>
+                  <Select value={propertyFilter} onValueChange={setPropertyFilter}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Todas las propiedades</SelectItem>
+                      {data?.properties.map(item => (
+                        <SelectItem key={item.property.id} value={item.property.id}>
+                          {item.property.title} · {item.owner.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="statement-start-date">Desde</Label>
+                  <Input
+                    id="statement-start-date"
+                    type="date"
+                    value={startDateFilter}
+                    max={endDateFilter || undefined}
+                    onChange={event => setStartDateFilter(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="statement-end-date">Hasta</Label>
+                  <Input
+                    id="statement-end-date"
+                    type="date"
+                    value={endDateFilter}
+                    min={startDateFilter || undefined}
+                    onChange={event => setEndDateFilter(event.target.value)}
+                  />
+                </div>
+                {(startDateFilter || endDateFilter || propertyFilter !== 'ALL') && (
+                  <div className="md:col-span-4">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setStartDateFilter('')
+                        setEndDateFilter('')
+                        setPropertyFilter('ALL')
+                      }}
+                    >
+                      Limpiar filtros
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Summary Cards */}
             {data && (
               <div className="grid gap-4 md:grid-cols-3">
@@ -450,8 +589,8 @@ export default function RelacionGastosPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm text-muted-foreground">Gastos</p>
-                        <p className="text-2xl font-bold text-red-500">{formatCurrency(data.totals.totalPending)}</p>
-                        <p className="text-xs text-muted-foreground">Por cobrar a propietarios</p>
+                        <p className="text-2xl font-bold text-red-500">{formatCurrency(periodSummary.expenses)}</p>
+                        <p className="text-xs text-muted-foreground">Cargos del período</p>
                       </div>
                       <div className="h-12 w-12 rounded-xl bg-red-500/10 flex items-center justify-center">
                         <TrendingDown className="h-6 w-6 text-red-500" />
@@ -465,8 +604,8 @@ export default function RelacionGastosPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm text-muted-foreground">Pagos</p>
-                        <p className="text-2xl font-bold text-blue-500">{formatCurrency(data.totals.totalPayments)}</p>
-                        <p className="text-xs text-muted-foreground">Pagos de propietarios</p>
+                        <p className="text-2xl font-bold text-blue-500">{formatCurrency(periodSummary.payments)}</p>
+                        <p className="text-xs text-muted-foreground">Abonos del período</p>
                       </div>
                       <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
                         <DollarSign className="h-6 w-6 text-blue-500" />
@@ -482,21 +621,21 @@ export default function RelacionGastosPage() {
                         <p className="text-sm text-muted-foreground">Balance</p>
                         <p className={cn(
                           "text-2xl font-bold",
-                          data.totals.totalBalance >= 0 ? "text-green-500" : "text-red-500"
+                          periodSummary.balance > 0 ? "text-red-500" : "text-green-500"
                         )}>
-                          {formatCurrency(data.totals.totalBalance)}
+                          {formatCurrency(Math.abs(periodSummary.balance))}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {data.totals.totalBalance >= 0 ? "Saldo a favor de admin" : "Saldo a favor de propietarios"}
+                          {periodSummary.balance > 0 ? "Pendiente al administrador" : "A favor del propietario"}
                         </p>
                       </div>
                       <div className={cn(
                         "h-12 w-12 rounded-xl flex items-center justify-center",
-                        data.totals.totalBalance >= 0 ? "bg-green-500/10" : "bg-red-500/10"
+                        periodSummary.balance > 0 ? "bg-red-500/10" : "bg-green-500/10"
                       )}>
                         <Wallet className={cn(
                           "h-6 w-6",
-                          data.totals.totalBalance >= 0 ? "text-green-500" : "text-red-500"
+                          periodSummary.balance > 0 ? "text-red-500" : "text-green-500"
                         )} />
                       </div>
                     </div>
@@ -509,9 +648,9 @@ export default function RelacionGastosPage() {
             {data && groupedByOwner && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Balance por Propiedad</CardTitle>
+                  <CardTitle>Estados de cuenta por propiedad</CardTitle>
                   <CardDescription>
-                    {data.properties.length} propiedades registradas
+                    Movimientos ordenados por fecha con saldo acumulado
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -541,15 +680,15 @@ export default function RelacionGastosPage() {
                                 <div className="flex items-center gap-4">
                                   <div className={cn(
                                     "h-10 w-10 rounded-lg flex items-center justify-center",
-                                    propBalance.totals.balance >= 0 
-                                      ? "bg-green-500/10" 
-                                      : "bg-red-500/10"
+                                    propBalance.endingBalance > 0
+                                      ? "bg-red-500/10"
+                                      : "bg-green-500/10"
                                   )}>
                                     <Building2 className={cn(
                                       "h-5 w-5",
-                                      propBalance.totals.balance >= 0 
-                                        ? "text-green-500" 
-                                        : "text-red-500"
+                                      propBalance.endingBalance > 0
+                                        ? "text-red-500"
+                                        : "text-green-500"
                                     )} />
                                   </div>
                                   <div className="text-left">
@@ -563,12 +702,12 @@ export default function RelacionGastosPage() {
                                   <div className="text-right">
                                     <p className={cn(
                                       "font-bold",
-                                      propBalance.totals.balance >= 0 ? "text-green-500" : "text-red-500"
+                                      propBalance.endingBalance > 0 ? "text-red-500" : "text-green-500"
                                     )}>
-                                      {formatCurrency(propBalance.totals.balance)}
+                                      {formatCurrency(Math.abs(propBalance.endingBalance))}
                                     </p>
                                     <p className="text-xs text-muted-foreground">
-                                      {propBalance.totals.balance >= 0 ? "Saldo a favor" : "Debe"}
+                                      {propBalance.endingBalance > 0 ? "Pendiente" : "A favor"}
                                     </p>
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -594,109 +733,56 @@ export default function RelacionGastosPage() {
 
                               {/* Expanded Details */}
                               {expandedProperties.has(propBalance.property.id) && (
-                                <div className="border-t p-4 space-y-6 bg-muted/30">
-                                  {/* Summary */}
-                                  <div className="grid grid-cols-3 gap-4">
-                                    <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/10">
-                                      <p className="text-xs text-muted-foreground">Gastos</p>
-                                      <p className="text-lg font-bold text-red-500">{formatCurrency(propBalance.totals.pending)}</p>
-                                    </div>
-                                    <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
-                                      <p className="text-xs text-muted-foreground">Pagos</p>
-                                      <p className="text-lg font-bold text-blue-500">{formatCurrency(propBalance.totals.payments)}</p>
-                                    </div>
-                                    <div className={cn(
-                                      "p-3 rounded-lg border",
-                                      propBalance.totals.balance >= 0 
-                                        ? "bg-green-500/5 border-green-500/10" 
-                                        : "bg-red-500/5 border-red-500/10"
-                                    )}>
-                                      <p className="text-xs text-muted-foreground">Balance</p>
-                                      <p className={cn(
-                                        "text-lg font-bold",
-                                        propBalance.totals.balance >= 0 ? "text-green-500" : "text-red-500"
-                                      )}>
-                                        {formatCurrency(propBalance.totals.balance)}
-                                      </p>
-                                    </div>
-                                  </div>
-
-                                  {/* Pending Expenses */}
-                                  {propBalance.pendingExpenses.length > 0 && (
-                                    <div>
-                                      <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                                        <Clock className="h-4 w-4 text-red-500" />
-                                        Gastos Pendientes de Reembolso ({propBalance.pendingExpenses.length})
-                                      </h4>
-                                      <div className="bg-white rounded-lg border overflow-hidden">
-                                        <Table>
-                                          <TableHeader>
-                                            <TableRow>
-                                              <TableHead>Descripción</TableHead>
-                                              <TableHead>Categoría</TableHead>
-                                              <TableHead>Fecha</TableHead>
-                                              <TableHead className="text-right">Monto</TableHead>
-                                            </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                            {propBalance.pendingExpenses.map((expense) => (
-                                              <TableRow key={expense.id}>
-                                                <TableCell>{expense.description}</TableCell>
-                                                <TableCell>
-                                                  <Badge variant="outline" className="text-xs">
-                                                    {categoryLabels[expense.category] || expense.category}
-                                                  </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground">
-                                                  {new Date(expense.date).toLocaleDateString('es-PA')}
-                                                </TableCell>
-                                                <TableCell className="text-right font-medium text-red-500">
-                                                  {formatCurrency(expense.amount)}
-                                                </TableCell>
-                                              </TableRow>
-                                            ))}
+                                <div className="border-t bg-muted/30 p-4">
+                                  <div className="overflow-hidden rounded-lg border bg-background">
+                                    <div className="overflow-x-auto">
+                                      <Table>
+                                        <TableHeader>
+                                          <TableRow>
+                                            <TableHead className="min-w-28">Fecha</TableHead>
+                                            <TableHead className="min-w-52">Descripción</TableHead>
+                                            <TableHead className="min-w-40">Categoría</TableHead>
+                                            <TableHead className="text-right">Monto</TableHead>
+                                            <TableHead className="text-right">Balance</TableHead>
+                                            <TableHead className="w-16 text-center">Acciones</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {startDateFilter && (
                                             <TableRow className="bg-muted/50">
-                                              <TableCell colSpan={3} className="font-medium">Total Gastos</TableCell>
-                                              <TableCell className="text-right font-bold text-red-500">
-                                                {formatCurrency(propBalance.totals.pending)}
+                                              <TableCell>{new Date(`${startDateFilter}T12:00:00`).toLocaleDateString('es-PA')}</TableCell>
+                                              <TableCell className="font-medium">Saldo anterior</TableCell>
+                                              <TableCell>—</TableCell>
+                                              <TableCell className="text-right">—</TableCell>
+                                              <TableCell className="text-right font-semibold">{formatCurrency(propBalance.openingBalance)}</TableCell>
+                                              <TableCell />
+                                            </TableRow>
+                                          )}
+                                          {propBalance.movements.map(movement => (
+                                            <TableRow key={`${movement.type}-${movement.id}`}>
+                                              <TableCell className="whitespace-nowrap text-muted-foreground">
+                                                {new Date(movement.date).toLocaleDateString('es-PA')}
                                               </TableCell>
-                                            </TableRow>
-                                          </TableBody>
-                                        </Table>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Owner Payments */}
-                                  {propBalance.ownerPayments.length > 0 && (
-                                    <div>
-                                      <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                                        <Receipt className="h-4 w-4 text-blue-500" />
-                                        Pagos del Propietario ({propBalance.ownerPayments.length})
-                                      </h4>
-                                      <div className="bg-white rounded-lg border overflow-hidden">
-                                        <Table>
-                                          <TableHeader>
-                                            <TableRow>
-                                              <TableHead>Fecha</TableHead>
-                                              <TableHead>Método</TableHead>
-                                              <TableHead>Referencia</TableHead>
-                                              <TableHead>Notas</TableHead>
-                                              <TableHead className="text-right">Monto</TableHead>
-                                              <TableHead className="text-center">Acciones</TableHead>
-                                            </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                            {propBalance.ownerPayments.map((payment) => (
-                                              <TableRow key={payment.id}>
-                                                <TableCell>{new Date(payment.date).toLocaleDateString('es-PA')}</TableCell>
-                                                <TableCell>{payment.method || 'N/A'}</TableCell>
-                                                <TableCell>{payment.reference || 'N/A'}</TableCell>
-                                                <TableCell className="text-muted-foreground">{payment.notes || 'N/A'}</TableCell>
-                                                <TableCell className="text-right font-medium text-green-500">
-                                                  +{formatCurrency(payment.amount)}
-                                                </TableCell>
-                                                <TableCell className="text-center">
+                                              <TableCell>{movement.description}</TableCell>
+                                              <TableCell>
+                                                <Badge variant={movement.type === 'GASTO' ? 'outline' : 'secondary'} className="whitespace-nowrap text-xs">
+                                                  {movement.category}
+                                                </Badge>
+                                              </TableCell>
+                                              <TableCell className={cn(
+                                                'whitespace-nowrap text-right font-medium',
+                                                movement.type === 'GASTO' ? 'text-red-600' : 'text-emerald-600'
+                                              )}>
+                                                {movement.type === 'GASTO' ? '+' : '-'}{formatCurrency(movement.amount)}
+                                              </TableCell>
+                                              <TableCell className={cn(
+                                                'whitespace-nowrap text-right font-semibold',
+                                                movement.balance > 0 ? 'text-red-600' : 'text-emerald-600'
+                                              )}>
+                                                {formatCurrency(movement.balance)}
+                                              </TableCell>
+                                              <TableCell className="text-center">
+                                                {movement.payment && (
                                                   <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                       <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -704,40 +790,42 @@ export default function RelacionGastosPage() {
                                                       </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                      <DropdownMenuItem onClick={() => openEditPaymentDialog(payment, propBalance.property.id)}>
-                                                        <Edit className="h-4 w-4 mr-2" />
-                                                        Editar
+                                                      <DropdownMenuItem onClick={() => openEditPaymentDialog(movement.payment!, propBalance.property.id)}>
+                                                        <Edit className="mr-2 h-4 w-4" /> Editar pago
                                                       </DropdownMenuItem>
-                                                      <DropdownMenuItem 
-                                                        className="text-destructive"
-                                                        onClick={() => openDeletePaymentDialog(payment.id)}
-                                                      >
-                                                        Eliminar
+                                                      <DropdownMenuItem className="text-destructive" onClick={() => openDeletePaymentDialog(movement.payment!.id)}>
+                                                        Eliminar pago
                                                       </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                   </DropdownMenu>
-                                                </TableCell>
-                                              </TableRow>
-                                            ))}
-                                            <TableRow className="bg-muted/50">
-                                              <TableCell colSpan={5} className="font-medium">Total Pagos</TableCell>
-                                              <TableCell className="text-right font-bold text-green-500">
-                                                {formatCurrency(propBalance.totals.payments)}
+                                                )}
                                               </TableCell>
                                             </TableRow>
-                                          </TableBody>
-                                        </Table>
-                                      </div>
+                                          ))}
+                                          {!propBalance.movements.length && !startDateFilter && (
+                                            <TableRow>
+                                              <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                                No hay movimientos en el período seleccionado.
+                                              </TableCell>
+                                            </TableRow>
+                                          )}
+                                          <TableRow className="bg-muted/60">
+                                            <TableCell colSpan={3} className="font-semibold">Saldo final</TableCell>
+                                            <TableCell className="text-right text-xs text-muted-foreground">
+                                              Gastos {formatCurrency(propBalance.periodExpenses)} · Pagos {formatCurrency(propBalance.periodPayments)}
+                                            </TableCell>
+                                            <TableCell className={cn(
+                                              'text-right font-bold',
+                                              propBalance.endingBalance > 0 ? 'text-red-600' : 'text-emerald-600'
+                                            )}>
+                                              {formatCurrency(propBalance.endingBalance)}
+                                            </TableCell>
+                                            <TableCell />
+                                          </TableRow>
+                                        </TableBody>
+                                      </Table>
                                     </div>
-                                  )}
-
-                                  {/* Empty state */}
-                                  {propBalance.pendingExpenses.length === 0 && propBalance.ownerPayments.length === 0 && (
-                                    <div className="text-center py-8 text-muted-foreground">
-                                      <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                      <p>No hay movimientos registrados</p>
-                                    </div>
-                                  )}
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -746,10 +834,10 @@ export default function RelacionGastosPage() {
                       </div>
                     ))}
 
-                    {data.properties.length === 0 && (
+                    {statements.length === 0 && (
                       <div className="text-center py-8 text-muted-foreground">
                         <Wallet className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No hay propiedades registradas</p>
+                        <p>No hay propiedades o movimientos que coincidan con los filtros</p>
                       </div>
                     )}
                   </div>

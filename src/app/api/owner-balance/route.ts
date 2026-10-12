@@ -47,12 +47,11 @@ export async function GET(request: NextRequest) {
     // Obtener IDs de propiedades
     const propertyIds = propertiesWithOwner.map(p => p.id);
 
-    // Obtener gastos pagados por admin que no han sido reembolsados
+    // Un estado de cuenta conserva todos los cargos gestionados, incluso si ya fueron reembolsados.
     const adminExpenses = await prisma.expense.findMany({
       where: {
         propertyId: { in: propertyIds },
         paidByAdmin: true,
-        reimbursedByOwner: false
       }
     });
 
@@ -92,7 +91,8 @@ export async function GET(request: NextRequest) {
 
       const totalPending = pendingExpenses.reduce((sum, e) => sum + e.amount, 0);
       const totalPayments = propertyPayments.reduce((sum, p) => sum + p.amount, 0);
-      const balance = totalPayments - totalPending;
+      // Positivo: pendiente al administrador. Negativo: saldo a favor del propietario.
+      const balance = totalPending - totalPayments;
 
       return {
         property: {
