@@ -453,14 +453,14 @@ export default function RelacionGastosPage() {
           if (a.type !== b.type) return a.type === 'GASTO' ? -1 : 1
           return a.id.localeCompare(b.id)
         }).map(movement => {
-          balance += movement.type === 'GASTO' ? movement.amount : -movement.amount
+          balance += movement.type === 'GASTO' ? -movement.amount : movement.amount
           return { ...movement, balance }
         })
 
         const dateKey = (value: string) => new Date(value).toISOString().slice(0, 10)
         const openingBalance = allMovements
           .filter(movement => startDateFilter && dateKey(movement.date) < startDateFilter)
-          .reduce((sum, movement) => sum + (movement.type === 'GASTO' ? movement.amount : -movement.amount), 0)
+          .reduce((sum, movement) => sum + (movement.type === 'GASTO' ? -movement.amount : movement.amount), 0)
         const movements = allMovements.filter(movement => {
           const date = dateKey(movement.date)
           return (!startDateFilter || date >= startDateFilter) && (!endDateFilter || date <= endDateFilter)
@@ -621,21 +621,25 @@ export default function RelacionGastosPage() {
                         <p className="text-sm text-muted-foreground">Balance</p>
                         <p className={cn(
                           "text-2xl font-bold",
-                          periodSummary.balance > 0 ? "text-red-500" : "text-green-500"
+                          periodSummary.balance < 0 ? "text-red-500" : "text-green-500"
                         )}>
-                          {formatCurrency(Math.abs(periodSummary.balance))}
+                          {formatCurrency(periodSummary.balance)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {periodSummary.balance > 0 ? "Pendiente al administrador" : "A favor del propietario"}
+                          {periodSummary.balance < 0
+                            ? "Pendiente al administrador"
+                            : periodSummary.balance > 0
+                              ? "A favor del propietario"
+                              : "Sin saldo pendiente"}
                         </p>
                       </div>
                       <div className={cn(
                         "h-12 w-12 rounded-xl flex items-center justify-center",
-                        periodSummary.balance > 0 ? "bg-red-500/10" : "bg-green-500/10"
+                        periodSummary.balance < 0 ? "bg-red-500/10" : "bg-green-500/10"
                       )}>
                         <Wallet className={cn(
                           "h-6 w-6",
-                          periodSummary.balance > 0 ? "text-red-500" : "text-green-500"
+                          periodSummary.balance < 0 ? "text-red-500" : "text-green-500"
                         )} />
                       </div>
                     </div>
@@ -680,13 +684,13 @@ export default function RelacionGastosPage() {
                                 <div className="flex items-center gap-4">
                                   <div className={cn(
                                     "h-10 w-10 rounded-lg flex items-center justify-center",
-                                    propBalance.endingBalance > 0
+                                    propBalance.endingBalance < 0
                                       ? "bg-red-500/10"
                                       : "bg-green-500/10"
                                   )}>
                                     <Building2 className={cn(
                                       "h-5 w-5",
-                                      propBalance.endingBalance > 0
+                                      propBalance.endingBalance < 0
                                         ? "text-red-500"
                                         : "text-green-500"
                                     )} />
@@ -702,12 +706,12 @@ export default function RelacionGastosPage() {
                                   <div className="text-right">
                                     <p className={cn(
                                       "font-bold",
-                                      propBalance.endingBalance > 0 ? "text-red-500" : "text-green-500"
+                                      propBalance.endingBalance < 0 ? "text-red-500" : "text-green-500"
                                     )}>
-                                      {formatCurrency(Math.abs(propBalance.endingBalance))}
+                                      {formatCurrency(propBalance.endingBalance)}
                                     </p>
                                     <p className="text-xs text-muted-foreground">
-                                      {propBalance.endingBalance > 0 ? "Pendiente" : "A favor"}
+                                      {propBalance.endingBalance < 0 ? "Pendiente" : propBalance.endingBalance > 0 ? "A favor" : "Saldado"}
                                     </p>
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -773,11 +777,11 @@ export default function RelacionGastosPage() {
                                                 'whitespace-nowrap text-right font-medium',
                                                 movement.type === 'GASTO' ? 'text-red-600' : 'text-emerald-600'
                                               )}>
-                                                {movement.type === 'GASTO' ? '+' : '-'}{formatCurrency(movement.amount)}
+                                                {movement.type === 'GASTO' ? '-' : '+'}{formatCurrency(movement.amount)}
                                               </TableCell>
                                               <TableCell className={cn(
                                                 'whitespace-nowrap text-right font-semibold',
-                                                movement.balance > 0 ? 'text-red-600' : 'text-emerald-600'
+                                                movement.balance < 0 ? 'text-red-600' : 'text-emerald-600'
                                               )}>
                                                 {formatCurrency(movement.balance)}
                                               </TableCell>
@@ -816,7 +820,7 @@ export default function RelacionGastosPage() {
                                             </TableCell>
                                             <TableCell className={cn(
                                               'text-right font-bold',
-                                              propBalance.endingBalance > 0 ? 'text-red-600' : 'text-emerald-600'
+                                              propBalance.endingBalance < 0 ? 'text-red-600' : 'text-emerald-600'
                                             )}>
                                               {formatCurrency(propBalance.endingBalance)}
                                             </TableCell>

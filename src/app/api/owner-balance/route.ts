@@ -91,8 +91,8 @@ export async function GET(request: NextRequest) {
 
       const totalPending = pendingExpenses.reduce((sum, e) => sum + e.amount, 0);
       const totalPayments = propertyPayments.reduce((sum, p) => sum + p.amount, 0);
-      // Positivo: pendiente al administrador. Negativo: saldo a favor del propietario.
-      const balance = totalPending - totalPayments;
+      // Negativo: pendiente al administrador. Positivo: saldo a favor del propietario.
+      const balance = totalPayments - totalPending;
 
       return {
         property: {
