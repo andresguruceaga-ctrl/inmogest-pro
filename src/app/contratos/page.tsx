@@ -79,7 +79,7 @@ const CONTRACT_TYPES = ['ARRENDAMIENTO', 'ADMINISTRACION'] as const
 const CONTRACT_STATUSES = ['VIGENTE', 'VENCIDO', 'CANCELADO', 'RENOVADO'] as const
 
 export default function ContratosPage() {
-  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
+  const contextPropertyId = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || ''
   const [contracts, setContracts] = useState<Contract[]>([])
   const [properties, setProperties] = useState<Property[]>([])
   const [tenants, setTenants] = useState<TenantUser[]>([])

@@ -171,7 +171,7 @@ const ticketPriorityConfig: Record<string, { label: string; color: string }> = {
 export default function ReportesPage() {
   const { user } = useAppStore()
   const { toast } = useToast()
-  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
+  const contextPropertyId = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || ''
   
   const [loading, setLoading] = useState(false)
   const [reportData, setReportData] = useState<ReportData | null>(null)

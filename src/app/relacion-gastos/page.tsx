@@ -118,7 +118,7 @@ const paymentMethods = [
 
 export default function RelacionGastosPage() {
   const { toast } = useToast()
-  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
+  const contextPropertyId = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || ''
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<BalanceData | null>(null)
   const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set())

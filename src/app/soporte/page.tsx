@@ -89,7 +89,7 @@ const categoryOptions = [
 
 export default function SoportePage() {
   const { toast } = useToast()
-  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
+  const contextPropertyId = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || ''
 
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [properties, setProperties] = useState<Property[]>([])

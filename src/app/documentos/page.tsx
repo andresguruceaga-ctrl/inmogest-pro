@@ -55,7 +55,7 @@ const documentTypes = [
 ]
 
 export default function DocumentosPage() {
-  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
+  const contextPropertyId = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || ''
   const [documents, setDocuments] = useState<Document[]>([])
   const [properties, setProperties] = useState<Property[]>([])
   const [admins, setAdmins] = useState<User[]>([])

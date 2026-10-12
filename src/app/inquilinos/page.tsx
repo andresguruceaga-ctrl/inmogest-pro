@@ -99,7 +99,7 @@ const ticketStatuses: Record<string, { label: string; color: string }> = {
 }
 
 export default function InquilinosPage() {
-  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
+  const contextPropertyId = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || ''
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [properties, setProperties] = useState<Property[]>([])
   const [tickets, setTickets] = useState<TicketData[]>([])
