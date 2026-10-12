@@ -142,12 +142,12 @@ export async function GET(request: NextRequest) {
     })
 
     // ========== OWNER BALANCE DATA ==========
-    // Get pending expenses (paid by admin, not reimbursed)
+    // El estado de cuenta conserva todos los gastos gestionados para mostrar
+    // el historial completo, incluso cuando ya fueron reembolsados.
     const pendingExpenses = await prisma.expense.findMany({
       where: {
         propertyId: { in: propertyIds },
         paidByAdmin: true,
-        reimbursedByOwner: false
       },
       include: {
         property: {

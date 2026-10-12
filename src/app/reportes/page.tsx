@@ -24,6 +24,7 @@ import { Separator } from '@/components/ui/separator'
 import { useAppStore } from '@/lib/store'
 import { useToast } from '@/hooks/use-toast'
 import { generateOwnerBalancePDF, generateReportPDF, type OwnerBalanceData } from '@/lib/pdf-utils'
+import { buildOwnerStatements } from '@/lib/owner-statement'
 import { cn } from '@/lib/utils'
 
 interface Owner {
@@ -570,7 +571,7 @@ const handleDownloadPDF = () => {
                   <p className="mt-2 max-w-2xl text-sm text-cyan-50/90 md:text-base">
                     {reportView === 'financial'
                       ? 'Ingresos, gastos, rendimiento y actividad operativa en un solo informe.'
-                      : 'Gastos adelantados, abonos del propietario y saldo acumulado con el administrador.'}
+                      : 'Gastos gestionados, pagos del propietario y balance acumulado.'}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/20 bg-white/10 px-5 py-4 text-left backdrop-blur-sm md:text-right">
@@ -1380,6 +1381,7 @@ function OwnerBalanceReport({
     )
   }
 
+  const statements = buildOwnerStatements(data)
   const balanceLabel = data.totals.balance >= 0
     ? 'A favor del propietario'
     : 'Pendiente al administrador'
@@ -1394,7 +1396,7 @@ function OwnerBalanceReport({
               Relación entre propietario y administrador
             </CardTitle>
             <CardDescription className="mt-1">
-              Saldo acumulado de gastos adelantados y abonos registrados para la selección actual.
+              Estado de cuenta acumulado de gastos gestionados y pagos del propietario.
             </CardDescription>
           </div>
           <Button onClick={onDownload} className="no-print bg-[#126b73] hover:bg-[#0f5960]">
@@ -1405,9 +1407,9 @@ function OwnerBalanceReport({
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-              <p className="text-sm text-red-700">Gastos adelantados</p>
+              <p className="text-sm text-red-700">Gastos gestionados</p>
               <p className="mt-1 text-2xl font-bold text-red-700">{formatCurrency(data.totals.pending)}</p>
-              <p className="mt-1 text-xs text-red-600">Pagados por el administrador y pendientes de reembolso</p>
+              <p className="mt-1 text-xs text-red-600">Cargos acumulados en el estado de cuenta</p>
             </div>
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <p className="text-sm text-emerald-700">Abonos del propietario</p>
@@ -1425,81 +1427,60 @@ function OwnerBalanceReport({
 
       <Card className="rounded-2xl border-0 shadow-sm">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingDown className="h-4 w-4 text-red-500" />
-            Gastos gestionados por el administrador
-          </CardTitle>
-          <CardDescription>{data.pendingExpenses.length} gastos pendientes de reembolso</CardDescription>
+          <CardTitle>Estados de cuenta por propiedad</CardTitle>
+          <CardDescription>Movimientos ordenados por fecha con gastos negativos, pagos positivos y balance acumulado</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-hidden rounded-xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Descripción</TableHead>
-                  <TableHead>Propiedad</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Categoría</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.pendingExpenses.map(expense => (
-                  <TableRow key={expense.id}>
-                    <TableCell className="font-medium">{expense.description}</TableCell>
-                    <TableCell>{expense.property.title}</TableCell>
-                    <TableCell>{new Date(expense.date).toLocaleDateString('es-PA')}</TableCell>
-                    <TableCell><Badge variant="outline">{categoryLabels[expense.category] || expense.category}</Badge></TableCell>
-                    <TableCell className="text-right font-semibold text-red-600">{formatCurrency(expense.amount)}</TableCell>
-                  </TableRow>
-                ))}
-                {!data.pendingExpenses.length && (
-                  <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No hay gastos pendientes.</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl border-0 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingUp className="h-4 w-4 text-emerald-500" />
-            Abonos del propietario
-          </CardTitle>
-          <CardDescription>{data.ownerPayments.length} abonos registrados</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-hidden rounded-xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Propiedad</TableHead>
-                  <TableHead>Método</TableHead>
-                  <TableHead>Referencia</TableHead>
-                  <TableHead>Notas</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.ownerPayments.map(payment => (
-                  <TableRow key={payment.id}>
-                    <TableCell>{new Date(payment.date).toLocaleDateString('es-PA')}</TableCell>
-                    <TableCell>{payment.property?.title || 'Sin propiedad'}</TableCell>
-                    <TableCell>{payment.method || 'No indicado'}</TableCell>
-                    <TableCell>{payment.reference || '-'}</TableCell>
-                    <TableCell className="max-w-[260px] whitespace-normal">{payment.notes || '-'}</TableCell>
-                    <TableCell className="text-right font-semibold text-emerald-600">{formatCurrency(payment.amount)}</TableCell>
-                  </TableRow>
-                ))}
-                {!data.ownerPayments.length && (
-                  <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No hay abonos registrados.</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+        <CardContent className="space-y-5">
+          {statements.map(statement => (
+            <div key={statement.property.id} className="overflow-hidden rounded-xl border">
+              <div className="flex flex-col gap-3 border-b bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold">{statement.property.title}</p>
+                  <p className="text-xs text-muted-foreground">{statement.movements.length} movimientos</p>
+                </div>
+                <div className="grid grid-cols-3 gap-4 text-right text-sm">
+                  <div><p className="text-xs text-muted-foreground">Gastos</p><p className="font-semibold text-red-600">-{formatCurrency(statement.expenses)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Pagos</p><p className="font-semibold text-emerald-600">+{formatCurrency(statement.payments)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Balance</p><p className={cn('font-bold', statement.balance < 0 ? 'text-red-600' : 'text-emerald-600')}>{formatCurrency(statement.balance)}</p></div>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-28">Fecha</TableHead>
+                      <TableHead className="min-w-52">Descripción</TableHead>
+                      <TableHead className="min-w-40">Categoría</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead className="text-right">Balance</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {statement.movements.map(movement => (
+                      <TableRow key={`${movement.type}-${movement.id}`}>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">{new Date(movement.date).toLocaleDateString('es-PA')}</TableCell>
+                        <TableCell>{movement.description}</TableCell>
+                        <TableCell>
+                          <Badge variant={movement.type === 'GASTO' ? 'outline' : 'secondary'} className="whitespace-nowrap text-xs">
+                            {movement.type === 'GASTO' ? categoryLabels[movement.category] || movement.category : movement.category}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className={cn('whitespace-nowrap text-right font-medium', movement.type === 'GASTO' ? 'text-red-600' : 'text-emerald-600')}>
+                          {movement.type === 'GASTO' ? '-' : '+'}{formatCurrency(movement.amount)}
+                        </TableCell>
+                        <TableCell className={cn('whitespace-nowrap text-right font-semibold', movement.balance < 0 ? 'text-red-600' : 'text-emerald-600')}>
+                          {formatCurrency(movement.balance)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ))}
+          {!statements.length && (
+            <div className="py-10 text-center text-muted-foreground">No hay movimientos registrados para la selección actual.</div>
+          )}
         </CardContent>
       </Card>
     </div>

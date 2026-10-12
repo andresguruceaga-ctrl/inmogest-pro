@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf'
+import { buildOwnerStatements } from '@/lib/owner-statement'
 
 interface ReportPropertyData {
   propertyId: string
@@ -931,7 +932,7 @@ export function generateOwnerBalancePDF(params: {
   addHeader()
 
   const cards = [
-    { label: 'Gastos adelantados', value: data.totals.pending, color: [239, 107, 98] as [number, number, number] },
+    { label: 'Gastos gestionados', value: data.totals.pending, color: [239, 107, 98] as [number, number, number] },
     { label: 'Abonos del propietario', value: data.totals.payments, color: [25, 165, 157] as [number, number, number] },
     { label: data.totals.balance >= 0 ? 'A favor del propietario' : 'Pendiente al administrador', value: Math.abs(data.totals.balance), color: [53, 120, 200] as [number, number, number] },
   ]
@@ -953,92 +954,67 @@ export function generateOwnerBalancePDF(params: {
   })
   y += 34
 
-  sectionTitle('GASTOS PAGADOS POR EL ADMINISTRADOR PENDIENTES DE REEMBOLSO', [239, 107, 98])
-  const drawExpenseHeader = () => {
+  const statements = buildOwnerStatements(data)
+  const drawStatementHeader = () => {
     doc.setFillColor(240, 243, 245)
     doc.rect(margin, y, contentWidth, 7, 'F')
     doc.setTextColor(60, 70, 75)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
-    doc.text('Descripción', margin + 3, y + 5)
-    doc.text('Propiedad', margin + 82, y + 5)
-    doc.text('Fecha', margin + 132, y + 5)
-    doc.text('Monto', pageWidth - margin - 3, y + 5, { align: 'right' })
+    doc.setFontSize(7.2)
+    doc.text('Fecha', margin + 3, y + 5)
+    doc.text('Descripcion', margin + 30, y + 5)
+    doc.text('Categoria', margin + 92, y + 5)
+    doc.text('Monto', margin + 152, y + 5, { align: 'right' })
+    doc.text('Balance', pageWidth - margin - 3, y + 5, { align: 'right' })
     y += 9
-  }
-  drawExpenseHeader()
-  if (!data.pendingExpenses.length) {
-    doc.setTextColor(100, 110, 115)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    doc.text('No hay gastos pendientes de reembolso.', margin + 3, y + 5)
-    y += 12
-  } else {
-    for (const expense of data.pendingExpenses) {
-      const description = doc.splitTextToSize(safeText(expense.description), 74) as string[]
-      const property = doc.splitTextToSize(safeText(expense.property.title), 43) as string[]
-      const rowHeight = Math.max(8, Math.max(description.length, property.length) * 4 + 3)
-      if (ensureSpace(rowHeight + 2)) drawExpenseHeader()
-      doc.setTextColor(55, 65, 70)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7.5)
-      doc.text(description, margin + 3, y + 4)
-      doc.text(property, margin + 82, y + 4)
-      doc.text(formatDate(expense.date), margin + 132, y + 4)
-      doc.setFont('helvetica', 'bold')
-      doc.text(formatCurrency(expense.amount), pageWidth - margin - 3, y + 4, { align: 'right' })
-      y += rowHeight
-      doc.setDrawColor(232, 235, 237)
-      doc.line(margin, y, pageWidth - margin, y)
-    }
-    y += 5
   }
 
-  sectionTitle('ABONOS REALIZADOS POR EL PROPIETARIO', [25, 165, 157])
-  const drawPaymentHeader = () => {
-    doc.setFillColor(240, 243, 245)
-    doc.rect(margin, y, contentWidth, 7, 'F')
-    doc.setTextColor(60, 70, 75)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
-    doc.text('Fecha', margin + 3, y + 5)
-    doc.text('Propiedad', margin + 31, y + 5)
-    doc.text('Método / referencia', margin + 86, y + 5)
-    doc.text('Monto', pageWidth - margin - 3, y + 5, { align: 'right' })
-    y += 9
-  }
-  drawPaymentHeader()
-  if (!data.ownerPayments.length) {
-    doc.setTextColor(100, 110, 115)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    doc.text('No hay abonos registrados para la seleccion actual.', margin + 3, y + 5)
-    y += 12
-  } else {
-    for (const payment of data.ownerPayments) {
-      const property = doc.splitTextToSize(safeText(payment.property?.title || 'Sin propiedad'), 48) as string[]
-      const method = safeText([payment.method, payment.reference].filter(Boolean).join(' - ') || 'Sin referencia')
-      const methodLines = doc.splitTextToSize(method, 57) as string[]
-      const notes = payment.notes ? doc.splitTextToSize(`Nota: ${safeText(payment.notes)}`, 105) as string[] : []
-      const rowHeight = Math.max(8, Math.max(property.length, methodLines.length) * 4 + 3) + notes.length * 4
-      if (ensureSpace(rowHeight + 2)) drawPaymentHeader()
+  for (const statement of statements) {
+    sectionTitle(`ESTADO DE CUENTA - ${statement.property.title}`, [18, 107, 115])
+    drawStatementHeader()
+
+    for (const movement of statement.movements) {
+      const description = doc.splitTextToSize(safeText(movement.description), 56) as string[]
+      const category = doc.splitTextToSize(
+        safeText(movement.type === 'GASTO' ? categoryLabels[movement.category] || movement.category : movement.category),
+        48
+      ) as string[]
+      const rowHeight = Math.max(8, Math.max(description.length, category.length) * 4 + 3)
+      if (ensureSpace(rowHeight + 2)) drawStatementHeader()
       doc.setTextColor(55, 65, 70)
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7.5)
-      doc.text(formatDate(payment.date), margin + 3, y + 4)
-      doc.text(property, margin + 31, y + 4)
-      doc.text(methodLines, margin + 86, y + 4)
+      doc.setFontSize(7.2)
+      doc.text(formatDate(movement.date), margin + 3, y + 4)
+      doc.text(description, margin + 30, y + 4)
+      doc.text(category, margin + 92, y + 4)
       doc.setFont('helvetica', 'bold')
-      doc.text(formatCurrency(payment.amount), pageWidth - margin - 3, y + 4, { align: 'right' })
-      if (notes.length) {
-        doc.setFont('helvetica', 'italic')
-        doc.setTextColor(105, 115, 120)
-        doc.text(notes, margin + 31, y + Math.max(property.length, methodLines.length) * 4 + 5)
-      }
+      doc.setTextColor(...(movement.type === 'GASTO' ? [185, 28, 28] : [22, 130, 90]) as [number, number, number])
+      doc.text(`${movement.type === 'GASTO' ? '-' : '+'}${formatCurrency(movement.amount)}`, margin + 152, y + 4, { align: 'right' })
+      doc.setTextColor(...(movement.balance < 0 ? [185, 28, 28] : [22, 130, 90]) as [number, number, number])
+      doc.text(formatCurrency(movement.balance), pageWidth - margin - 3, y + 4, { align: 'right' })
       y += rowHeight
       doc.setDrawColor(232, 235, 237)
       doc.line(margin, y, pageWidth - margin, y)
     }
+
+    y += 4
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(55, 65, 70)
+    doc.text(`Gastos: -${formatCurrency(statement.expenses)}`, margin + 3, y + 4)
+    doc.text(`Pagos: +${formatCurrency(statement.payments)}`, margin + 70, y + 4)
+    doc.setTextColor(...(statement.balance < 0 ? [185, 28, 28] : [22, 130, 90]) as [number, number, number])
+    doc.text(`Balance: ${formatCurrency(statement.balance)}`, pageWidth - margin - 3, y + 4, { align: 'right' })
+    y += 12
+  }
+
+  if (!statements.length) {
+    sectionTitle('ESTADO DE CUENTA', [18, 107, 115])
+    doc.setTextColor(100, 110, 115)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.text('No hay movimientos registrados para la seleccion actual.', margin + 3, y + 5)
+    y += 12
   }
 
   ensureSpace(38)
