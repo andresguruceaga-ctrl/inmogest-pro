@@ -99,6 +99,7 @@ const ticketStatuses: Record<string, { label: string; color: string }> = {
 }
 
 export default function InquilinosPage() {
+  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [properties, setProperties] = useState<Property[]>([])
   const [tickets, setTickets] = useState<TicketData[]>([])
@@ -128,7 +129,7 @@ export default function InquilinosPage() {
     paymentMethod: 'TRANSFERENCIA',
     dueDate: '',
     paidAt: '',
-    propertyId: '',
+    propertyId: contextPropertyId,
     receiptImage: '',
     receiptFileName: '',
     includeItbms: false,
@@ -139,7 +140,7 @@ export default function InquilinosPage() {
     description: '',
     category: '',
     priority: 'MEDIA',
-    propertyId: '',
+    propertyId: contextPropertyId,
     photos: '',
     photoFileName: '',
   })
@@ -160,7 +161,7 @@ export default function InquilinosPage() {
       const [tenantsRes, propertiesRes, ticketsRes] = await Promise.all([
         fetch('/api/users?role=INQUILINO'),
         fetch('/api/properties'),
-        fetch('/api/tickets'),
+        fetch(contextPropertyId ? `/api/tickets?propertyId=${encodeURIComponent(contextPropertyId)}` : '/api/tickets'),
       ])
 
       if (tenantsRes.ok) {
@@ -181,6 +182,10 @@ export default function InquilinosPage() {
       setLoading(false)
     }
   }
+
+  const visibleTenants = contextPropertyId
+    ? tenants.filter(tenant => properties.some(property => property.id === contextPropertyId && property.tenantId === tenant.id))
+    : tenants
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -494,7 +499,7 @@ export default function InquilinosPage() {
       paymentMethod: 'TRANSFERENCIA',
       dueDate: '',
       paidAt: '',
-      propertyId: '',
+      propertyId: contextPropertyId,
       receiptImage: '',
       receiptFileName: '',
       includeItbms: false,
@@ -508,7 +513,7 @@ export default function InquilinosPage() {
       description: '',
       category: '',
       priority: 'MEDIA',
-      propertyId: '',
+      propertyId: contextPropertyId,
       photos: '',
       photoFileName: '',
     })
@@ -700,14 +705,14 @@ export default function InquilinosPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Inquilinos Activos</CardTitle>
-                  <CardDescription>{tenants.length} inquilinos registrados</CardDescription>
+                  <CardDescription>{visibleTenants.length} inquilinos registrados</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loading ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                     </div>
-                  ) : tenants.length === 0 ? (
+                  ) : visibleTenants.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p>No hay inquilinos registrados</p>
@@ -725,7 +730,7 @@ export default function InquilinosPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {tenants.map((tenant) => (
+                        {visibleTenants.map((tenant) => (
                           <TableRow key={tenant.id}>
                             <TableCell>
                               <div className="flex items-center gap-3">

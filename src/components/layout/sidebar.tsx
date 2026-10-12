@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ import {
   Building,
   PanelLeft,
   Wallet,
+  ArrowLeft,
 } from 'lucide-react'
 import {
   Sidebar as ShadcnSidebar,
@@ -45,8 +47,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useRouter } from 'next/navigation'
-
 // Icon mapping
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard,
@@ -63,6 +63,8 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   User,
   TrendingUp,
   Wallet,
+  Settings,
+  ArrowLeft,
 }
 
 interface NavItem {
@@ -73,17 +75,21 @@ interface NavItem {
 
 const adminNavItems: NavItem[] = [
   { title: 'Dashboard', href: '/', icon: 'LayoutDashboard' },
-  { title: 'Propiedades', href: '/propiedades', icon: 'Building2' },
-  { title: 'Contratos', href: '/contratos', icon: 'FileText' },
-  { title: 'Inquilinos', href: '/inquilinos', icon: 'Users' },
   { title: 'Propietarios', href: '/propietarios', icon: 'UserCheck' },
-  { title: 'Pagos', href: '/pagos', icon: 'CreditCard' },
-  { title: 'Gastos', href: '/gastos', icon: 'Receipt' },
-  { title: 'Relación de Gastos', href: '/relacion-gastos', icon: 'Wallet' },
-  { title: 'Documentos', href: '/documentos', icon: 'FolderOpen' },
-  { title: 'Reportes', href: '/reportes', icon: 'BarChart3' },
-  { title: 'Soporte', href: '/soporte', icon: 'HelpCircle' },
+  { title: 'Propiedades', href: '/propiedades', icon: 'Building2' },
   { title: 'Configuración', href: '/configuracion', icon: 'Settings' },
+]
+
+const propertyNavItems = (propertyId: string): NavItem[] => [
+  { title: 'Resumen', href: `/propiedades/${propertyId}`, icon: 'LayoutDashboard' },
+  { title: 'Contratos', href: `/contratos?propertyId=${propertyId}`, icon: 'FileText' },
+  { title: 'Inquilinos', href: `/inquilinos?propertyId=${propertyId}`, icon: 'Users' },
+  { title: 'Pagos', href: `/pagos?propertyId=${propertyId}`, icon: 'CreditCard' },
+  { title: 'Gastos', href: `/gastos?propertyId=${propertyId}`, icon: 'Receipt' },
+  { title: 'Relación de Gastos', href: `/relacion-gastos?propertyId=${propertyId}`, icon: 'Wallet' },
+  { title: 'Documentos', href: `/documentos?propertyId=${propertyId}`, icon: 'FolderOpen' },
+  { title: 'Soporte', href: `/soporte?propertyId=${propertyId}`, icon: 'HelpCircle' },
+  { title: 'Reportes', href: `/reportes?propertyId=${propertyId}`, icon: 'BarChart3' },
 ]
 
 const propietarioNavItems: NavItem[] = [
@@ -108,11 +114,43 @@ export function Sidebar() {
   const router = useRouter()
   const { user, logout } = useAppStore()
   const { toggleSidebar } = useSidebar()
+  const [queryPropertyId, setQueryPropertyId] = useState('')
+  const [propertyTitle, setPropertyTitle] = useState('')
+
+  const pathPropertyId = pathname.startsWith('/propiedades/')
+    ? pathname.split('/')[2] || ''
+    : ''
+  const propertyId = pathPropertyId || queryPropertyId
+  const isPropertyWorkspace = user?.role === 'admin' && Boolean(propertyId)
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('propertyId') || ''
+    queueMicrotask(() => setQueryPropertyId(id))
+  }, [pathname])
+
+  useEffect(() => {
+    if (!propertyId || user?.role !== 'admin') {
+      queueMicrotask(() => setPropertyTitle(''))
+      return
+    }
+
+    let active = true
+    fetch(`/api/properties/${propertyId}`)
+      .then(response => response.ok ? response.json() : null)
+      .then(result => {
+        if (active) setPropertyTitle(result?.data?.title || 'Propiedad')
+      })
+      .catch(() => {
+        if (active) setPropertyTitle('Propiedad')
+      })
+
+    return () => { active = false }
+  }, [propertyId, user?.role])
 
   const getNavItems = () => {
     switch (user?.role) {
       case 'admin':
-        return adminNavItems
+        return isPropertyWorkspace ? propertyNavItems(propertyId) : adminNavItems
       case 'propietario':
         return propietarioNavItems
       case 'inquilino':
@@ -140,14 +178,16 @@ export function Sidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>
-            {user?.role === 'admin' ? 'Administración' : 
+            {isPropertyWorkspace ? (propertyTitle || 'Propiedad') :
+             user?.role === 'admin' ? 'Administración' :
              user?.role === 'propietario' ? 'Propietario' : 'Inquilino'}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
                 const Icon = iconMap[item.icon] || LayoutDashboard
-                const isActive = pathname === item.href
+                const itemPath = item.href.split('?')[0]
+                const isActive = pathname === itemPath
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
@@ -166,6 +206,18 @@ export function Sidebar() {
                 )
               })}
             </SidebarMenu>
+            {isPropertyWorkspace && (
+              <SidebarMenu className="mt-4 border-t pt-4">
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link href="/propiedades">
+                      <ArrowLeft className="h-4 w-4" />
+                      <span>Volver a propiedades</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

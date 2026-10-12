@@ -89,6 +89,7 @@ const categoryOptions = [
 
 export default function SoportePage() {
   const { toast } = useToast()
+  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
 
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [properties, setProperties] = useState<Property[]>([])
@@ -116,7 +117,7 @@ export default function SoportePage() {
     category: '',
     priority: 'MEDIA',
     status: 'ABIERTO',
-    propertyId: '',
+    propertyId: contextPropertyId,
     response: '',
   })
 
@@ -145,10 +146,12 @@ export default function SoportePage() {
 
   async function fetchTickets() {
     try {
-      let url = '/api/tickets'
+      let url = contextPropertyId
+        ? `/api/tickets?propertyId=${encodeURIComponent(contextPropertyId)}`
+        : '/api/tickets'
 
       if (currentUser?.role === 'inquilino') {
-        url += `?userId=${currentUser.id}`
+        url += `${url.includes('?') ? '&' : '?'}userId=${currentUser.id}`
       } else if (currentUser?.role === 'propietario') {
         const propsResponse = await fetch('/api/properties')
         if (propsResponse.ok) {
@@ -215,6 +218,9 @@ export default function SoportePage() {
           )
         }
 
+        if (contextPropertyId) {
+          userProperties = userProperties.filter((property: { id: string }) => property.id === contextPropertyId)
+        }
         setProperties(userProperties)
       }
     } catch (error) {
@@ -490,7 +496,7 @@ export default function SoportePage() {
       category: '',
       priority: 'MEDIA',
       status: 'ABIERTO',
-      propertyId: '',
+      propertyId: contextPropertyId,
       response: '',
     })
     setPendingFiles([])

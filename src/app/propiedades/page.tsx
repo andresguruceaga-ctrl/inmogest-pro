@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { Footer } from '@/components/layout/footer'
@@ -12,12 +13,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Building2, Plus, Search, Filter, MoreHorizontal, Eye, Edit, Trash2, MapPin, Bed, Bath, Car, Ruler, Loader2, User, Upload, Image as ImageIcon, X, Camera } from 'lucide-react'
+import { Building2, Plus, Search, MoreHorizontal, Eye, Edit, Trash2, MapPin, Bed, Bath, Car, Ruler, Loader2, User, Upload, Image as ImageIcon, X, Camera, LayoutGrid, List } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
-import { PropertyDetailDialog } from '@/components/properties/property-detail-dialog'
 
 interface Property {
   id: string
@@ -128,6 +128,7 @@ const expenseFrequencies = [
 ]
 
 export default function PropiedadesPage() {
+  const router = useRouter()
   const [properties, setProperties] = useState<Property[]>([])
   const [admins, setAdmins] = useState<User[]>([])
   const [owners, setOwners] = useState<User[]>([])
@@ -137,6 +138,8 @@ export default function PropiedadesPage() {
   const [uploading, setUploading] = useState(false)
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -144,33 +147,6 @@ export default function PropiedadesPage() {
   const [editUploading, setEditUploading] = useState(false)
   const editFileInputRef = useRef<HTMLInputElement>(null)
   
-  // Detail dialog state
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
-  const [propertyForDetail, setPropertyForDetail] = useState<Property | null>(null)
-  
-  const openDetailDialog = async (property: Property) => {
-    try {
-      const response = await fetch(`/api/properties/${property.id}`)
-      if (response.ok) {
-        const result = await response.json()
-        setPropertyForDetail(result.data) // API returns { success, data }
-        setDetailDialogOpen(true)
-      } else {
-        toast({
-          title: 'Error',
-          description: 'No se pudo cargar los detalles de la propiedad',
-          variant: 'destructive',
-        })
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Error de conexión',
-        variant: 'destructive',
-      })
-    }
-  }
-
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -817,6 +793,13 @@ export default function PropiedadesPage() {
     return found?.label || type
   }
 
+  const visibleProperties = properties.filter(property => {
+    const query = searchQuery.trim().toLocaleLowerCase('es')
+    if (!query) return true
+    return [property.title, property.address, property.district, property.province, property.buildingName]
+      .some(value => value?.toLocaleLowerCase('es').includes(query))
+  })
+
   return (
     <SidebarProvider>
       <Sidebar />
@@ -841,12 +824,33 @@ export default function PropiedadesPage() {
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="Buscar propiedades..." className="pl-9" />
+                    <Input
+                      placeholder="Buscar propiedades..."
+                      className="pl-9"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                    />
                   </div>
-                  <Button variant="outline">
-                    <Filter className="h-4 w-4 mr-2" />
-                    Filtros
-                  </Button>
+                  <div className="flex rounded-md border p-1" aria-label="Tipo de vista">
+                    <Button
+                      variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setViewMode('grid')}
+                      aria-label="Vista en cuadros"
+                    >
+                      <LayoutGrid className="h-4 w-4 mr-2" />
+                      Cuadros
+                    </Button>
+                    <Button
+                      variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setViewMode('list')}
+                      aria-label="Vista en lista"
+                    >
+                      <List className="h-4 w-4 mr-2" />
+                      Lista
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -854,18 +858,60 @@ export default function PropiedadesPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Listado de Propiedades</CardTitle>
-                <CardDescription>{properties.length} propiedades registradas</CardDescription>
+                <CardDescription>{visibleProperties.length} propiedades encontradas</CardDescription>
               </CardHeader>
               <CardContent>
                 {loading ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
-                ) : properties.length === 0 ? (
+                ) : visibleProperties.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No hay propiedades registradas</p>
                     <p className="text-sm">Haz clic en "Nueva Propiedad" para agregar una</p>
+                  </div>
+                ) : viewMode === 'grid' ? (
+                  <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                    {visibleProperties.map((property) => (
+                      <Card
+                        key={property.id}
+                        className="group cursor-pointer overflow-hidden transition-shadow hover:shadow-md"
+                        onClick={() => router.push(`/propiedades/${property.id}`)}
+                      >
+                        <div className="relative aspect-[16/9] bg-muted">
+                          {property.mainImage ? (
+                            <img src={property.mainImage} alt={property.title} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full items-center justify-center">
+                              <Building2 className="h-12 w-12 text-muted-foreground/40" />
+                            </div>
+                          )}
+                          <div className="absolute left-3 top-3">{getStatusBadge(property.status)}</div>
+                        </div>
+                        <CardContent className="space-y-4 p-5">
+                          <div>
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <h3 className="font-semibold leading-tight group-hover:text-primary">{property.title}</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">{getPropertyTypeLabel(property.propertyType)}</p>
+                              </div>
+                              <span className="whitespace-nowrap font-semibold">${property.monthlyRent.toLocaleString()}/mes</span>
+                            </div>
+                            <p className="mt-3 flex items-center gap-1 text-sm text-muted-foreground">
+                              <MapPin className="h-4 w-4 shrink-0" />
+                              <span className="truncate">{property.district}, {property.province}</span>
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-4 border-t pt-4 text-sm text-muted-foreground">
+                            {property.bedrooms > 0 && <span className="flex items-center gap-1"><Bed className="h-4 w-4" />{property.bedrooms}</span>}
+                            <span className="flex items-center gap-1"><Bath className="h-4 w-4" />{property.bathrooms}</span>
+                            <span className="flex items-center gap-1"><Car className="h-4 w-4" />{property.parkingSpaces}</span>
+                            <span className="flex items-center gap-1"><Ruler className="h-4 w-4" />{property.totalArea}m²</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 ) : (
                   <Table>
@@ -880,7 +926,7 @@ export default function PropiedadesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {properties.map((property) => (
+                    {visibleProperties.map((property) => (
                       <TableRow key={property.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
@@ -939,7 +985,7 @@ export default function PropiedadesPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openDetailDialog(property)}>
+                              <DropdownMenuItem onClick={() => router.push(`/propiedades/${property.id}`)}>
                                 <Eye className="h-4 w-4 mr-2" />
                                 Ver detalle
                               </DropdownMenuItem>
@@ -1760,12 +1806,6 @@ export default function PropiedadesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Property Detail Dialog */}
-      <PropertyDetailDialog 
-        property={propertyForDetail} 
-        open={detailDialogOpen} 
-        onOpenChange={setDetailDialogOpen} 
-      />
     </SidebarProvider>
   )
 }

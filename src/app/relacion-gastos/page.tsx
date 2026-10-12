@@ -118,12 +118,13 @@ const paymentMethods = [
 
 export default function RelacionGastosPage() {
   const { toast } = useToast()
+  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<BalanceData | null>(null)
   const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set())
   const [startDateFilter, setStartDateFilter] = useState('')
   const [endDateFilter, setEndDateFilter] = useState('')
-  const [propertyFilter, setPropertyFilter] = useState('ALL')
+  const [propertyFilter, setPropertyFilter] = useState(contextPropertyId || 'ALL')
   
   // Payment dialog
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
@@ -148,7 +149,7 @@ export default function RelacionGastosPage() {
     paymentMethod: '',
     referenceNumber: '',
     notes: '',
-    propertyId: '',
+    propertyId: contextPropertyId,
   })
   
   const [editPaymentForm, setEditPaymentForm] = useState({
@@ -165,7 +166,7 @@ export default function RelacionGastosPage() {
 
   async function fetchData() {
     try {
-      const response = await fetch('/api/owner-balance')
+      const response = await fetch(contextPropertyId ? `/api/owner-balance?propertyId=${encodeURIComponent(contextPropertyId)}` : '/api/owner-balance')
       const result = await response.json()
       
       if (result.success) {

@@ -70,6 +70,7 @@ const statusOptions = [
 ]
 
 export default function PagosPage() {
+  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
   const [payments, setPayments] = useState<Payment[]>([])
   const [properties, setProperties] = useState<Property[]>([])
   const [tenants, setTenants] = useState<Tenant[]>([])
@@ -93,7 +94,7 @@ export default function PagosPage() {
     paymentMethod: 'TRANSFERENCIA',
     dueDate: '',
     paidAt: '',
-    propertyId: '',
+    propertyId: contextPropertyId,
     userId: '',
     receiptImage: '',
     receiptFileName: '',
@@ -129,7 +130,7 @@ export default function PagosPage() {
   async function fetchData() {
     try {
       const [paymentsRes, propertiesRes, tenantsRes] = await Promise.all([
-        fetch('/api/payments'),
+        fetch(contextPropertyId ? `/api/payments?propertyId=${encodeURIComponent(contextPropertyId)}` : '/api/payments'),
         fetch('/api/properties'),
         fetch('/api/users?role=INQUILINO'),
       ])
@@ -437,7 +438,7 @@ export default function PagosPage() {
       paymentMethod: 'TRANSFERENCIA',
       dueDate: '',
       paidAt: '',
-      propertyId: '',
+      propertyId: contextPropertyId,
       userId: '',
       receiptImage: '',
       receiptFileName: '',

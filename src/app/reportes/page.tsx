@@ -171,6 +171,7 @@ const ticketPriorityConfig: Record<string, { label: string; color: string }> = {
 export default function ReportesPage() {
   const { user } = useAppStore()
   const { toast } = useToast()
+  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
   
   const [loading, setLoading] = useState(false)
   const [reportData, setReportData] = useState<ReportData | null>(null)
@@ -182,7 +183,7 @@ export default function ReportesPage() {
   const [selectedMonth, setSelectedMonth] = useState(String(new Date().getMonth() + 1))
   const [selectedYear, setSelectedYear] = useState(String(currentYear))
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null)
-  const [selectedPropertyId, setSelectedPropertyId] = useState('all')
+  const [selectedPropertyId, setSelectedPropertyId] = useState(contextPropertyId || 'all')
   
   // Data
   const [owners, setOwners] = useState<Owner[]>([])
@@ -312,7 +313,7 @@ export default function ReportesPage() {
       } else if (selectedOwnerId === 'all') {
         void fetchProperties()
       }
-      setSelectedPropertyId('all')
+      setSelectedPropertyId(contextPropertyId || 'all')
     })
   }, [selectedOwnerId])
 

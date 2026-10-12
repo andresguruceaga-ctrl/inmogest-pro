@@ -79,6 +79,7 @@ const CONTRACT_TYPES = ['ARRENDAMIENTO', 'ADMINISTRACION'] as const
 const CONTRACT_STATUSES = ['VIGENTE', 'VENCIDO', 'CANCELADO', 'RENOVADO'] as const
 
 export default function ContratosPage() {
+  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
   const [contracts, setContracts] = useState<Contract[]>([])
   const [properties, setProperties] = useState<Property[]>([])
   const [tenants, setTenants] = useState<TenantUser[]>([])
@@ -128,7 +129,7 @@ export default function ContratosPage() {
     monthlyAmount: '',
     depositAmount: '',
     terms: '',
-    propertyId: '',
+    propertyId: contextPropertyId,
     ownerId: '',
     tenantId: '',
   })
@@ -147,7 +148,7 @@ export default function ContratosPage() {
   async function fetchData() {
     try {
       const [contractsRes, propertiesRes, tenantsRes] = await Promise.all([
-        fetch('/api/contracts'),
+        fetch(contextPropertyId ? `/api/contracts?propertyId=${encodeURIComponent(contextPropertyId)}` : '/api/contracts'),
         fetch('/api/properties'),
         fetch('/api/users?role=INQUILINO'),
       ])
@@ -684,7 +685,7 @@ export default function ContratosPage() {
       monthlyAmount: '',
       depositAmount: '',
       terms: '',
-      propertyId: '',
+      propertyId: contextPropertyId,
       ownerId: '',
       tenantId: '',
     })

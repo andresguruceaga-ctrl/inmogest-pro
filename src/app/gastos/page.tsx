@@ -65,6 +65,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 export default function GastosPage() {
+  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
@@ -92,7 +93,7 @@ export default function GastosPage() {
     invoiceNumber: '',
     supplier: '',
     expenseDate: '',
-    propertyId: '',
+    propertyId: contextPropertyId,
     paidByAdmin: false,
   })
 
@@ -124,7 +125,7 @@ export default function GastosPage() {
   const fetchData = async () => {
     try {
       const [expensesRes, propertiesRes] = await Promise.all([
-        fetch('/api/expenses'),
+        fetch(contextPropertyId ? `/api/expenses?propertyId=${encodeURIComponent(contextPropertyId)}` : '/api/expenses'),
         fetch('/api/properties'),
       ])
 
@@ -424,7 +425,7 @@ export default function GastosPage() {
       invoiceNumber: '',
       supplier: '',
       expenseDate: '',
-      propertyId: '',
+      propertyId: contextPropertyId,
       paidByAdmin: false,
     })
   }

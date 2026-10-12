@@ -55,6 +55,7 @@ const documentTypes = [
 ]
 
 export default function DocumentosPage() {
+  const [contextPropertyId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || '')
   const [documents, setDocuments] = useState<Document[]>([])
   const [properties, setProperties] = useState<Property[]>([])
   const [admins, setAdmins] = useState<User[]>([])
@@ -72,7 +73,7 @@ export default function DocumentosPage() {
     fileUrl: '',
     fileName: '',
     fileSize: '',
-    propertyId: '',
+    propertyId: contextPropertyId,
     uploadedBy: '',
   })
 
@@ -83,7 +84,7 @@ export default function DocumentosPage() {
   async function fetchData() {
     try {
       const [documentsRes, propertiesRes, adminsRes] = await Promise.all([
-        fetch('/api/documents'),
+        fetch(contextPropertyId ? `/api/documents?propertyId=${encodeURIComponent(contextPropertyId)}` : '/api/documents'),
         fetch('/api/properties'),
         fetch('/api/users?role=ADMIN'),
       ])
@@ -220,7 +221,7 @@ export default function DocumentosPage() {
       fileUrl: '',
       fileName: '',
       fileSize: '',
-      propertyId: '',
+      propertyId: contextPropertyId,
       uploadedBy: '',
     })
   }
