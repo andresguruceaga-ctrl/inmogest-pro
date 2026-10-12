@@ -103,7 +103,7 @@ export default function PropertyWorkspacePage() {
   return (
     <SidebarProvider>
       <Sidebar />
-      <SidebarInset className="flex min-h-screen flex-col">
+      <SidebarInset className="flex min-h-screen min-w-0 flex-col">
         <Header />
         <main className="flex-1 p-4 md:p-6 lg:p-8">
           <div className="mx-auto max-w-7xl space-y-6">
@@ -124,8 +124,8 @@ export default function PropertyWorkspacePage() {
             ) : (
               <>
                 <div className="overflow-hidden rounded-xl border bg-card">
-                  <div className="grid md:grid-cols-[280px_1fr]">
-                    <div className="aspect-[16/9] bg-muted md:aspect-auto md:min-h-52">
+                  <div className="grid lg:grid-cols-[280px_minmax(0,1fr)]">
+                    <div className="aspect-[16/9] bg-muted lg:aspect-auto lg:min-h-52">
                       {property.mainImage ? (
                         <img src={property.mainImage} alt={property.title} className="h-full w-full object-cover" />
                       ) : (
