@@ -81,14 +81,10 @@ export default function MiPropiedadPage() {
                       <span className="text-muted-foreground">Alquiler mensual</span>
                       <span className="font-semibold">$2,500.00</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">ITBMS (7%)</span>
-                      <span className="font-semibold">$175.00</span>
-                    </div>
                     <Separator />
                     <div className="flex justify-between text-lg">
                       <span className="font-medium">Total mensual</span>
-                      <span className="font-bold text-primary">$2,675.00</span>
+                      <span className="font-bold text-primary">$2,500.00</span>
                     </div>
                   </div>
                   <div className="space-y-3">

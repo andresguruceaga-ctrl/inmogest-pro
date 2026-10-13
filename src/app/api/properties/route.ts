@@ -5,6 +5,29 @@ import { requireApiUser } from '@/lib/api-auth';
 import { propertyScope } from '@/lib/authorization';
 
 // Esquema de validación simplificado - coincide con el formulario del frontend
+const recurringExpenseSchema = z.object({
+  title: z.string().min(1, 'El nombre del gasto fijo es requerido'),
+  description: z.string().optional().nullable(),
+  category: z.enum([
+    'MANTENIMIENTO_PH',
+    'SEGURO',
+    'SERVICIOS_BASICOS',
+    'REPARACION',
+    'SERVICIO_TECNICO',
+    'IMPUESTOS',
+    'COMISION_ADMIN',
+    'OTROS',
+  ]),
+  amount: z.number().positive('El monto del gasto fijo debe ser mayor que cero'),
+  frequencyMonths: z.union([z.literal(1), z.literal(3), z.literal(4), z.literal(6), z.literal(12)]).default(1),
+  startsAt: z.string().date(),
+  endsAt: z.string().date().optional().nullable(),
+  paidByAdmin: z.boolean().default(false),
+}).refine(expense => !expense.startsAt || !expense.endsAt || expense.endsAt >= expense.startsAt, {
+  message: 'La fecha final debe ser igual o posterior a la fecha inicial',
+  path: ['endsAt'],
+})
+
 const createPropertySchema = z.object({
   title: z.string().min(1, 'El título es requerido'),
   description: z.string().optional().nullable(),
@@ -15,6 +38,15 @@ const createPropertySchema = z.object({
   neighborhood: z.string().optional().nullable(),
   address: z.string().min(1, 'La dirección es requerida'),
   buildingName: z.string().optional().nullable(),
+  hasTerrace: z.boolean().default(false),
+  hasBalcony: z.boolean().default(false),
+  hasDen: z.boolean().default(false),
+  hasSocialArea: z.boolean().default(false),
+  socialAreaDescription: z.string().optional().nullable(),
+  hasMaidRoomBathroom: z.boolean().default(false),
+  phContactName: z.string().optional().nullable(),
+  phContactPhone: z.string().optional().nullable(),
+  phContactEmail: z.union([z.string().email('El correo del PH no es válido'), z.literal('')]).optional().nullable(),
   totalArea: z.number().min(0, 'El área total debe ser válida'),
   builtArea: z.number().min(0).nullable().optional(),
   bedrooms: z.number().int().min(0).default(0),
@@ -37,29 +69,7 @@ const createPropertySchema = z.object({
   salePrice: z.number().min(0).nullable().optional(),
   saleDescription: z.string().optional().nullable(),
   forRent: z.boolean().default(true),
-  fixedExpenses: z.array(z.object({
-    title: z.string().min(1, 'El nombre del gasto fijo es requerido'),
-    description: z.string().optional().nullable(),
-    category: z.enum([
-      'MANTENIMIENTO_PH',
-      'SEGURO',
-      'SERVICIOS_BASICOS',
-      'REPARACION',
-      'SERVICIO_TECNICO',
-      'IMPUESTOS',
-      'COMISION_ADMIN',
-      'OTROS',
-    ]),
-    amount: z.number().positive('El monto del gasto fijo debe ser mayor que cero'),
-    frequencyMonths: z.union([
-      z.literal(1),
-      z.literal(3),
-      z.literal(4),
-      z.literal(6),
-      z.literal(12),
-    ]).default(1),
-    paidByAdmin: z.boolean().default(false),
-  })).default([]),
+  fixedExpenses: z.array(recurringExpenseSchema).default([]),
 });
 
 // GET - Listar propiedades
@@ -137,23 +147,11 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Calcular ITBMS mensual para cada propiedad
-    const propertiesWithITBMS = properties.map(property => {
-      const itbmsAmount = property.monthlyRent * (property.itbmsRate / 100);
-      const totalRentWithITBMS = property.monthlyRent + itbmsAmount;
-
-      return {
-        ...property,
-        itbmsAmount,
-        totalRentWithITBMS,
-      };
-    });
-
     return NextResponse.json({
       success: true,
-      data: propertiesWithITBMS,
-      count: propertiesWithITBMS.length,
-      properties: propertiesWithITBMS,
+      data: properties,
+      count: properties.length,
+      properties,
     });
   } catch (error) {
     console.error('Error al obtener propiedades:', error);
@@ -223,6 +221,15 @@ export async function POST(request: NextRequest) {
         neighborhood: validatedData.neighborhood ?? null,
         address: validatedData.address,
         buildingName: validatedData.buildingName ?? null,
+        hasTerrace: validatedData.hasTerrace,
+        hasBalcony: validatedData.hasBalcony,
+        hasDen: validatedData.hasDen,
+        hasSocialArea: validatedData.hasSocialArea,
+        socialAreaDescription: validatedData.hasSocialArea ? validatedData.socialAreaDescription || null : null,
+        hasMaidRoomBathroom: validatedData.hasMaidRoomBathroom,
+        phContactName: validatedData.phContactName || null,
+        phContactPhone: validatedData.phContactPhone || null,
+        phContactEmail: validatedData.phContactEmail || null,
         totalArea: validatedData.totalArea,
         builtArea: validatedData.builtArea ?? null,
         bedrooms: validatedData.bedrooms,
@@ -252,6 +259,8 @@ export async function POST(request: NextRequest) {
             category: expense.category,
             amount: expense.amount,
             frequencyMonths: expense.frequencyMonths,
+            startsAt: expense.startsAt ? new Date(`${expense.startsAt}T00:00:00.000Z`) : null,
+            endsAt: expense.endsAt ? new Date(`${expense.endsAt}T23:59:59.999Z`) : null,
             paidByAdmin: expense.paidByAdmin,
           })),
         },
@@ -288,20 +297,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Calcular ITBMS
-    const itbmsAmount = property.monthlyRent * (property.itbmsRate / 100);
-    const totalRentWithITBMS = property.monthlyRent + itbmsAmount;
-
     console.log('Property created successfully:', property.id);
 
     return NextResponse.json(
       {
         success: true,
-        data: {
-          ...property,
-          itbmsAmount,
-          totalRentWithITBMS,
-        },
+        data: property,
         message: 'Propiedad creada exitosamente',
       },
       { status: 201 }

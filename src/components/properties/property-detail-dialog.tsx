@@ -24,6 +24,15 @@ interface Property {
   neighborhood?: string | null
   address: string
   buildingName?: string | null
+  hasTerrace?: boolean
+  hasBalcony?: boolean
+  hasDen?: boolean
+  hasSocialArea?: boolean
+  socialAreaDescription?: string | null
+  hasMaidRoomBathroom?: boolean
+  phContactName?: string | null
+  phContactPhone?: string | null
+  phContactEmail?: string | null
   totalArea: number
   builtArea?: number | null
   bedrooms: number
@@ -35,7 +44,6 @@ interface Property {
   folioNumber?: string | null
   asientoNumber?: string | null
   monthlyRent: number
-  itbmsRate: number
   depositAmount: number
   status: string
   mainImage?: string | null
@@ -185,6 +193,11 @@ export function PropertyDetailDialog({ property, open, onOpenChange }: PropertyD
         `Baños: ${property.bathrooms}`,
         `Estacionamientos: ${property.parkingSpaces}`,
         property.floorNumber ? `Piso: ${property.floorNumber}` : null,
+        property.hasTerrace ? 'Terraza: Sí' : null,
+        property.hasBalcony ? 'Balcón: Sí' : null,
+        property.hasDen ? 'Den: Sí' : null,
+        property.hasMaidRoomBathroom ? 'Cuarto y baño de empleada: Sí' : null,
+        property.hasSocialArea ? `Área social: ${property.socialAreaDescription || 'Sí'}` : null,
       ].filter((line): line is string => Boolean(line))
 
       infoLines.forEach(line => {
@@ -209,6 +222,9 @@ export function PropertyDetailDialog({ property, open, onOpenChange }: PropertyD
         `Provincia: ${property.province}`,
         property.neighborhood ? `Barrio: ${property.neighborhood}` : null,
         property.buildingName ? `Edificio: ${property.buildingName}` : null,
+        property.phContactName ? `Contacto del PH: ${property.phContactName}` : null,
+        property.phContactPhone ? `Teléfono del PH: ${property.phContactPhone}` : null,
+        property.phContactEmail ? `Correo del PH: ${property.phContactEmail}` : null,
       ].filter((line): line is string => Boolean(line))
 
       locationLines.forEach(line => {
@@ -252,8 +268,6 @@ export function PropertyDetailDialog({ property, open, onOpenChange }: PropertyD
       
       const financialLines = [
         `Alquiler Mensual: ${formatCurrency(property.monthlyRent)}`,
-        `ITBMS: ${property.itbmsRate}%`,
-        `Alquiler + ITBMS: ${formatCurrency(property.monthlyRent * (1 + property.itbmsRate / 100))}`,
         `Depósito: ${formatCurrency(property.depositAmount)}`,
       ]
 
@@ -506,9 +520,6 @@ export function PropertyDetailDialog({ property, open, onOpenChange }: PropertyD
               </div>
               <div className="mt-1">
                 <p className="text-2xl font-bold">{formatCurrency(property.monthlyRent)}</p>
-                <p className="text-sm text-muted-foreground">
-                  + ITBMS ({property.itbmsRate}%): {formatCurrency(property.monthlyRent * (1 + property.itbmsRate / 100))}/mes
-                </p>
               </div>
               {property.depositAmount > 0 && (
                 <p className="text-sm text-muted-foreground mt-2">
@@ -517,6 +528,20 @@ export function PropertyDetailDialog({ property, open, onOpenChange }: PropertyD
               )}
             </CardContent>
           </Card>
+
+          {(property.hasTerrace || property.hasBalcony || property.hasDen || property.hasSocialArea || property.hasMaidRoomBathroom) && (
+            <div className="space-y-3">
+              <h3 className="flex items-center gap-2 font-semibold"><Home className="h-4 w-4" />Características adicionales</h3>
+              <div className="flex flex-wrap gap-2">
+                {property.hasTerrace && <Badge variant="secondary">Terraza</Badge>}
+                {property.hasBalcony && <Badge variant="secondary">Balcón</Badge>}
+                {property.hasDen && <Badge variant="secondary">Den</Badge>}
+                {property.hasMaidRoomBathroom && <Badge variant="secondary">Cuarto y baño de empleada</Badge>}
+                {property.hasSocialArea && <Badge variant="secondary">Área social</Badge>}
+              </div>
+              {property.hasSocialArea && property.socialAreaDescription && <p className="text-sm text-muted-foreground">{property.socialAreaDescription}</p>}
+            </div>
+          )}
 
           {/* Location */}
           <div className="space-y-3">
@@ -557,6 +582,17 @@ export function PropertyDetailDialog({ property, open, onOpenChange }: PropertyD
               )}
             </div>
           </div>
+
+          {(property.phContactName || property.phContactPhone || property.phContactEmail) && (
+            <div className="space-y-3">
+              <h3 className="flex items-center gap-2 font-semibold"><Building2 className="h-4 w-4" />Contacto del PH</h3>
+              <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+                {property.phContactName && <div><p className="text-muted-foreground">Contacto</p><p>{property.phContactName}</p></div>}
+                {property.phContactPhone && <div><p className="text-muted-foreground">Teléfono</p><p>{property.phContactPhone}</p></div>}
+                {property.phContactEmail && <div><p className="text-muted-foreground">Correo</p><p>{property.phContactEmail}</p></div>}
+              </div>
+            </div>
+          )}
 
           {/* Legal Info */}
           <div className="space-y-3">

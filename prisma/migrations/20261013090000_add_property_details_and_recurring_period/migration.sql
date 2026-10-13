@@ -1,0 +1,14 @@
+ALTER TABLE "Property"
+ADD COLUMN "hasTerrace" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "hasBalcony" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "hasDen" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "hasSocialArea" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "socialAreaDescription" TEXT,
+ADD COLUMN "hasMaidRoomBathroom" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "phContactName" TEXT,
+ADD COLUMN "phContactPhone" TEXT,
+ADD COLUMN "phContactEmail" TEXT;
+
+ALTER TABLE "RecurringExpense"
+ADD COLUMN "startsAt" TIMESTAMP(3),
+ADD COLUMN "endsAt" TIMESTAMP(3);

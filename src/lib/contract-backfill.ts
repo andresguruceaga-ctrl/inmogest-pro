@@ -162,9 +162,11 @@ export async function backfillContractRecords(
   }
 
   for (const recurring of contract.property.recurringExpenses) {
-    for (const [index, month] of months.entries()) {
-      if (index % recurring.frequencyMonths !== 0) continue
+    const recurringStart = recurring.startsAt || contract.startDate
+    for (const month of months) {
+      if (!isMonthOnSchedule(recurringStart, recurring.frequencyMonths, month)) continue
       const expenseDate = dateInMonth(month, 30)
+      if (expenseDate < recurringStart || (recurring.endsAt && expenseDate > recurring.endsAt)) continue
       if (expenseDate > now) continue
       const automationKey = fixedExpenseAutomationKey(recurring.id, monthPeriod(month))
       const existing = await prisma.expense.findUnique({ where: { automationKey } })

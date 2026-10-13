@@ -67,6 +67,15 @@ export function isRecurringExpenseDue(
   return elapsedMonths >= 0 && elapsedMonths % frequencyMonths === 0
 }
 
+export function isRecurringExpenseActiveForPeriod(
+  startsAt: Date,
+  endsAt: Date | null | undefined,
+  periodStart: Date,
+  periodEnd: Date
+) {
+  return startsAt <= periodEnd && (!endsAt || endsAt >= periodStart)
+}
+
 export function tenantPaymentAutomationKey(contractId: string, period: string) {
   return `tenant-rent:${contractId}:${period}`
 }
@@ -148,11 +157,15 @@ export async function runMonthlyAutomation(
         paidByAdmin: true,
         propertyId: true,
         createdAt: true,
+        startsAt: true,
+        endsAt: true,
       },
     })
-    const dueRecurringExpenses = recurringExpenses.filter(expense =>
-      isRecurringExpenseDue(expense.createdAt, expense.frequencyMonths, dates.current)
-    )
+    const dueRecurringExpenses = recurringExpenses.filter(expense => {
+      const startsAt = expense.startsAt || expense.createdAt
+      const isWithinPeriod = isRecurringExpenseActiveForPeriod(startsAt, expense.endsAt, dates.monthStart, dates.monthEnd)
+      return isWithinPeriod && isRecurringExpenseDue(startsAt, expense.frequencyMonths, dates.current)
+    })
     const expenseKeys = dueRecurringExpenses.map(expense =>
       fixedExpenseAutomationKey(expense.id, dates.period)
     )

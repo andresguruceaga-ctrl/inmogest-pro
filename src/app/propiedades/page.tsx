@@ -30,6 +30,15 @@ interface Property {
   neighborhood?: string | null
   address: string
   buildingName?: string | null
+  hasTerrace?: boolean
+  hasBalcony?: boolean
+  hasDen?: boolean
+  hasSocialArea?: boolean
+  socialAreaDescription?: string | null
+  hasMaidRoomBathroom?: boolean
+  phContactName?: string | null
+  phContactPhone?: string | null
+  phContactEmail?: string | null
   totalArea: number
   builtArea?: number | null
   bedrooms: number
@@ -41,7 +50,6 @@ interface Property {
   folioNumber?: string | null
   asientoNumber?: string | null
   monthlyRent: number
-  itbmsRate: number
   depositAmount: number
   status: string
   mainImage: string | null
@@ -51,6 +59,17 @@ interface Property {
   salePrice?: number | null
   saleDescription?: string | null
   forRent?: boolean
+  recurringExpenses?: Array<{
+    id: string
+    title: string
+    category: string
+    amount: number
+    frequencyMonths: number
+    startsAt?: string | null
+    endsAt?: string | null
+    createdAt?: string
+    paidByAdmin: boolean
+  }>
   owner?: { id: string; name: string; email: string; phone?: string | null } | null
   tenant?: { id: string; name: string; email: string; phone?: string | null } | null
 }
@@ -71,12 +90,23 @@ interface PhotoPreview {
 
 interface FixedExpenseDraft {
   id: string
+  persistedId?: string
   title: string
   category: string
   amount: string
   frequencyMonths: number
+  startsAt: string
+  endsAt: string
   paidByAdmin: boolean
 }
+
+const dateInputValue = (value?: string | null) => value ? new Date(value).toISOString().slice(0, 10) : ''
+const todayInputValue = () => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Panama',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(new Date())
 
 const propertyTypes = [
   { value: 'APARTAMENTO', label: 'Apartamento' },
@@ -157,6 +187,15 @@ export default function PropiedadesPage() {
     neighborhood: '',
     address: '',
     buildingName: '',
+    hasTerrace: false,
+    hasBalcony: false,
+    hasDen: false,
+    hasSocialArea: false,
+    socialAreaDescription: '',
+    hasMaidRoomBathroom: false,
+    phContactName: '',
+    phContactPhone: '',
+    phContactEmail: '',
     totalArea: '',
     builtArea: '',
     bedrooms: '0',
@@ -190,6 +229,15 @@ export default function PropiedadesPage() {
     neighborhood: '',
     address: '',
     buildingName: '',
+    hasTerrace: false,
+    hasBalcony: false,
+    hasDen: false,
+    hasSocialArea: false,
+    socialAreaDescription: '',
+    hasMaidRoomBathroom: false,
+    phContactName: '',
+    phContactPhone: '',
+    phContactEmail: '',
     totalArea: '',
     builtArea: '',
     bedrooms: '0',
@@ -212,6 +260,7 @@ export default function PropiedadesPage() {
   const [editPhotos, setEditPhotos] = useState<PhotoPreview[]>([])
   const [editMainPhotoIndex, setEditMainPhotoIndex] = useState<number | null>(null)
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseDraft[]>([])
+  const [editFixedExpenses, setEditFixedExpenses] = useState<FixedExpenseDraft[]>([])
 
   const addFixedExpense = () => {
     setFixedExpenses(current => [
@@ -222,9 +271,28 @@ export default function PropiedadesPage() {
         category: 'MANTENIMIENTO_PH',
         amount: '',
         frequencyMonths: 1,
+        startsAt: todayInputValue(),
+        endsAt: '',
         paidByAdmin: false,
       },
     ])
+  }
+
+  const addEditFixedExpense = () => {
+    setEditFixedExpenses(current => [...current, {
+      id: crypto.randomUUID(),
+      title: '',
+      category: 'MANTENIMIENTO_PH',
+      amount: '',
+      frequencyMonths: 1,
+      startsAt: todayInputValue(),
+      endsAt: '',
+      paidByAdmin: false,
+    }])
+  }
+
+  const updateEditFixedExpense = (id: string, patch: Partial<FixedExpenseDraft>) => {
+    setEditFixedExpenses(current => current.map(expense => expense.id === id ? { ...expense, ...patch } : expense))
   }
 
   const updateFixedExpense = (id: string, patch: Partial<FixedExpenseDraft>) => {
@@ -508,30 +576,50 @@ export default function PropiedadesPage() {
     
     setEditFormData({
       title: property.title,
-      description: '',
+      description: property.description || '',
       propertyType: property.propertyType,
       province: property.province,
       district: property.district || '',
-      corregimiento: '',
-      neighborhood: '',
+      corregimiento: property.corregimiento || '',
+      neighborhood: property.neighborhood || '',
       address: property.address,
-      buildingName: '',
+      buildingName: property.buildingName || '',
+      hasTerrace: property.hasTerrace || false,
+      hasBalcony: property.hasBalcony || false,
+      hasDen: property.hasDen || false,
+      hasSocialArea: property.hasSocialArea || false,
+      socialAreaDescription: property.socialAreaDescription || '',
+      hasMaidRoomBathroom: property.hasMaidRoomBathroom || false,
+      phContactName: property.phContactName || '',
+      phContactPhone: property.phContactPhone || '',
+      phContactEmail: property.phContactEmail || '',
       totalArea: String(property.totalArea),
-      builtArea: '',
+      builtArea: property.builtArea ? String(property.builtArea) : '',
       bedrooms: String(property.bedrooms),
       bathrooms: String(property.bathrooms),
       parkingSpaces: String(property.parkingSpaces),
-      floorNumber: '',
+      floorNumber: property.floorNumber ? String(property.floorNumber) : '',
       fincaNumber: property.fincaNumber || '',
-      tomoNumber: '',
-      folioNumber: '',
-      asientoNumber: '',
+      tomoNumber: property.tomoNumber || '',
+      folioNumber: property.folioNumber || '',
+      asientoNumber: property.asientoNumber || '',
       monthlyRent: String(property.monthlyRent),
-      depositAmount: '',
-      ownerId: '',
+      depositAmount: String(property.depositAmount || 0),
+      ownerId: property.owner?.id || '',
       adminId: '',
       status: property.status,
     })
+    setEditFixedExpenses((property.recurringExpenses || []).map(expense => ({
+      id: expense.id,
+      persistedId: expense.id,
+      title: expense.title,
+      category: expense.category,
+      amount: String(expense.amount),
+      frequencyMonths: expense.frequencyMonths,
+      startsAt: dateInputValue(expense.startsAt || expense.createdAt) || todayInputValue(),
+      endsAt: dateInputValue(expense.endsAt),
+      paidByAdmin: expense.paidByAdmin,
+    })))
     setEditPhotos(existingPhotos)
     setEditMainPhotoIndex(existingPhotos.length > 0 ? 0 : null)
     setEditDialogOpen(true)
@@ -561,15 +649,43 @@ export default function PropiedadesPage() {
           province: editFormData.province,
           district: editFormData.district,
           address: editFormData.address,
+          description: editFormData.description || null,
+          corregimiento: editFormData.corregimiento || null,
+          neighborhood: editFormData.neighborhood || null,
+          buildingName: editFormData.buildingName || null,
+          hasTerrace: editFormData.hasTerrace,
+          hasBalcony: editFormData.hasBalcony,
+          hasDen: editFormData.hasDen,
+          hasSocialArea: editFormData.hasSocialArea,
+          socialAreaDescription: editFormData.hasSocialArea ? editFormData.socialAreaDescription || null : null,
+          hasMaidRoomBathroom: editFormData.hasMaidRoomBathroom,
+          phContactName: editFormData.phContactName || null,
+          phContactPhone: editFormData.phContactPhone || null,
+          phContactEmail: editFormData.phContactEmail || null,
           totalArea: parseFloat(editFormData.totalArea) || 0,
+          builtArea: parseFloat(editFormData.builtArea) || null,
           bedrooms: parseInt(editFormData.bedrooms) || 0,
           bathrooms: parseInt(editFormData.bathrooms) || 1,
           parkingSpaces: parseInt(editFormData.parkingSpaces) || 0,
+          floorNumber: parseInt(editFormData.floorNumber) || null,
           monthlyRent: parseFloat(editFormData.monthlyRent) || 0,
+          depositAmount: parseFloat(editFormData.depositAmount) || 0,
           fincaNumber: editFormData.fincaNumber || null,
           status: editFormData.status,
           mainImage,
           images,
+          recurringExpenses: editFixedExpenses
+            .filter(expense => expense.title.trim() && Number(expense.amount) > 0)
+            .map(expense => ({
+              id: expense.persistedId,
+              title: expense.title.trim(),
+              category: expense.category,
+              amount: Number(expense.amount),
+              frequencyMonths: expense.frequencyMonths,
+              startsAt: expense.startsAt || null,
+              endsAt: expense.endsAt || null,
+              paidByAdmin: expense.paidByAdmin,
+            })),
         }),
       })
 
@@ -703,6 +819,8 @@ export default function PropiedadesPage() {
               category: expense.category,
               amount: Number(expense.amount),
               frequencyMonths: expense.frequencyMonths,
+              startsAt: expense.startsAt || null,
+              endsAt: expense.endsAt || null,
               paidByAdmin: expense.paidByAdmin,
             })),
         }),
@@ -746,6 +864,15 @@ export default function PropiedadesPage() {
       neighborhood: '',
       address: '',
       buildingName: '',
+      hasTerrace: false,
+      hasBalcony: false,
+      hasDen: false,
+      hasSocialArea: false,
+      socialAreaDescription: '',
+      hasMaidRoomBathroom: false,
+      phContactName: '',
+      phContactPhone: '',
+      phContactEmail: '',
       totalArea: '',
       builtArea: '',
       bedrooms: '0',
@@ -1115,6 +1242,28 @@ export default function PropiedadesPage() {
               </div>
             </div>
 
+            {/* Contacto del PH */}
+            <div className="space-y-4 rounded-lg border p-4">
+              <div>
+                <h4 className="font-medium text-sm">Datos de contacto del PH</h4>
+                <p className="mt-1 text-xs text-muted-foreground">Administración, conserjería o contacto principal del edificio.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="phContactName">Nombre del contacto</Label>
+                  <Input id="phContactName" value={formData.phContactName} onChange={(e) => setFormData({...formData, phContactName: e.target.value})} placeholder="Administración del PH" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phContactPhone">Teléfono</Label>
+                  <Input id="phContactPhone" type="tel" value={formData.phContactPhone} onChange={(e) => setFormData({...formData, phContactPhone: e.target.value})} placeholder="+507 6000-0000" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phContactEmail">Correo</Label>
+                  <Input id="phContactEmail" type="email" value={formData.phContactEmail} onChange={(e) => setFormData({...formData, phContactEmail: e.target.value})} placeholder="administracion@ph.com" />
+                </div>
+              </div>
+            </div>
+
             {/* Características */}
             <div className="space-y-4">
               <h4 className="font-medium text-sm text-muted-foreground">Características</h4>
@@ -1163,6 +1312,31 @@ export default function PropiedadesPage() {
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {[
+                  ['hasTerrace', 'Terraza'],
+                  ['hasBalcony', 'Balcón'],
+                  ['hasDen', 'Den'],
+                  ['hasSocialArea', 'Área social'],
+                  ['hasMaidRoomBathroom', 'CDE (cuarto y baño de empleada)'],
+                ].map(([field, label]) => (
+                  <label key={field} className="flex min-h-11 items-center gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(formData[field as keyof typeof formData])}
+                      onChange={(event) => setFormData({...formData, [field]: event.target.checked})}
+                      className="rounded border-gray-300"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {formData.hasSocialArea && (
+                <div className="space-y-2">
+                  <Label htmlFor="socialAreaDescription">Características del área social</Label>
+                  <Textarea id="socialAreaDescription" value={formData.socialAreaDescription} onChange={(e) => setFormData({...formData, socialAreaDescription: e.target.value})} placeholder="Ej. piscina, gimnasio, salón de eventos, parque infantil..." rows={3} />
+                </div>
+              )}
             </div>
 
             {/* Información Financiera */}
@@ -1199,7 +1373,7 @@ export default function PropiedadesPage() {
                 <div>
                   <h4 className="font-medium text-sm">Gastos fijos recurrentes</h4>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Se registrarán automáticamente el día 30 del mes que corresponda según su frecuencia, sin ITBMS.
+                    Se registrarán automáticamente el día 30 según su frecuencia y durante las fechas indicadas.
                   </p>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={addFixedExpense}>
@@ -1282,6 +1456,15 @@ export default function PropiedadesPage() {
                           placeholder="0.00"
                           required
                         />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`fixed-expense-start-${expense.id}`}>Fecha de inicio</Label>
+                        <Input id={`fixed-expense-start-${expense.id}`} type="date" value={expense.startsAt} onChange={(event) => updateFixedExpense(expense.id, { startsAt: event.target.value })} required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`fixed-expense-end-${expense.id}`}>Fecha de finalización</Label>
+                        <Input id={`fixed-expense-end-${expense.id}`} type="date" min={expense.startsAt || undefined} value={expense.endsAt} onChange={(event) => updateFixedExpense(expense.id, { endsAt: event.target.value })} />
+                        <p className="text-xs text-muted-foreground">Déjala vacía si no tiene fecha final.</p>
                       </div>
                       <label className="flex min-h-10 items-center gap-3 rounded-md border bg-background px-3 py-2 text-sm">
                         <input
@@ -1622,6 +1805,27 @@ export default function PropiedadesPage() {
               </div>
             </div>
 
+            <div className="space-y-4 rounded-lg border p-4">
+              <div>
+                <h4 className="font-medium text-sm">Datos de contacto del PH</h4>
+                <p className="mt-1 text-xs text-muted-foreground">Administración, conserjería o contacto principal del edificio.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-phContactName">Nombre del contacto</Label>
+                  <Input id="edit-phContactName" value={editFormData.phContactName} onChange={(e) => setEditFormData({...editFormData, phContactName: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-phContactPhone">Teléfono</Label>
+                  <Input id="edit-phContactPhone" type="tel" value={editFormData.phContactPhone} onChange={(e) => setEditFormData({...editFormData, phContactPhone: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-phContactEmail">Correo</Label>
+                  <Input id="edit-phContactEmail" type="email" value={editFormData.phContactEmail} onChange={(e) => setEditFormData({...editFormData, phContactEmail: e.target.value})} />
+                </div>
+              </div>
+            </div>
+
             {/* Características */}
             <div className="space-y-4">
               <h4 className="font-medium text-sm text-muted-foreground">Características</h4>
@@ -1670,6 +1874,26 @@ export default function PropiedadesPage() {
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {[
+                  ['hasTerrace', 'Terraza'],
+                  ['hasBalcony', 'Balcón'],
+                  ['hasDen', 'Den'],
+                  ['hasSocialArea', 'Área social'],
+                  ['hasMaidRoomBathroom', 'CDE (cuarto y baño de empleada)'],
+                ].map(([field, label]) => (
+                  <label key={field} className="flex min-h-11 items-center gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                    <input type="checkbox" checked={Boolean(editFormData[field as keyof typeof editFormData])} onChange={(event) => setEditFormData({...editFormData, [field]: event.target.checked})} className="rounded border-gray-300" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {editFormData.hasSocialArea && (
+                <div className="space-y-2">
+                  <Label htmlFor="edit-socialAreaDescription">Características del área social</Label>
+                  <Textarea id="edit-socialAreaDescription" value={editFormData.socialAreaDescription} onChange={(e) => setEditFormData({...editFormData, socialAreaDescription: e.target.value})} rows={3} />
+                </div>
+              )}
             </div>
 
             {/* Información Financiera */}
@@ -1688,6 +1912,54 @@ export default function PropiedadesPage() {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="space-y-4 rounded-lg border p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h4 className="font-medium text-sm">Gastos fijos recurrentes</h4>
+                  <p className="mt-1 text-xs text-muted-foreground">Puedes cambiar monto, frecuencia o vigencia sin alterar los gastos ya registrados.</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addEditFixedExpense}><Plus className="mr-2 h-4 w-4" />Agregar gasto fijo</Button>
+              </div>
+              {editFixedExpenses.length === 0 ? (
+                <p className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">No hay gastos recurrentes activos.</p>
+              ) : (
+                <div className="space-y-4">
+                  {editFixedExpenses.map((expense, index) => (
+                    <div key={expense.id} className="space-y-4 rounded-lg border bg-muted/30 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold">Gasto {index + 1}</p>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setEditFixedExpenses(current => current.filter(item => item.id !== expense.id))} aria-label={`Eliminar gasto fijo ${index + 1}`}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label>Nombre del gasto</Label>
+                          <Input value={expense.title} onChange={(event) => updateEditFixedExpense(expense.id, { title: event.target.value })} required />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Categoría</Label>
+                          <Select value={expense.category} onValueChange={(value) => updateEditFixedExpense(expense.id, { category: value })}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>{expenseCategories.map(category => <SelectItem key={category.value} value={category.value}>{category.label}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Frecuencia</Label>
+                          <Select value={String(expense.frequencyMonths)} onValueChange={(value) => updateEditFixedExpense(expense.id, { frequencyMonths: Number(value) })}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>{expenseFrequencies.map(frequency => <SelectItem key={frequency.value} value={String(frequency.value)}>{frequency.label}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2"><Label>Monto (USD)</Label><Input type="number" min="0.01" step="0.01" value={expense.amount} onChange={(event) => updateEditFixedExpense(expense.id, { amount: event.target.value })} required /></div>
+                        <div className="space-y-2"><Label>Fecha de inicio</Label><Input type="date" value={expense.startsAt} onChange={(event) => updateEditFixedExpense(expense.id, { startsAt: event.target.value })} required /></div>
+                        <div className="space-y-2"><Label>Fecha de finalización</Label><Input type="date" min={expense.startsAt || undefined} value={expense.endsAt} onChange={(event) => updateEditFixedExpense(expense.id, { endsAt: event.target.value })} /><p className="text-xs text-muted-foreground">Opcional.</p></div>
+                        <label className="flex min-h-10 items-center gap-3 rounded-md border bg-background px-3 py-2 text-sm"><input type="checkbox" checked={expense.paidByAdmin} onChange={(event) => updateEditFixedExpense(expense.id, { paidByAdmin: event.target.checked })} className="rounded border-gray-300" />Gestionado por el administrador</label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Fotos */}

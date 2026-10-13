@@ -16,7 +16,6 @@ import { Users, Plus, Search, Filter, MoreHorizontal, Eye, Edit, Phone, Mail, Ho
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 
@@ -132,7 +131,6 @@ export default function InquilinosPage() {
     propertyId: contextPropertyId,
     receiptImage: '',
     receiptFileName: '',
-    includeItbms: false,
   })
 
   const [ticketForm, setTicketForm] = useState({
@@ -373,7 +371,6 @@ export default function InquilinosPage() {
       const payload: Record<string, unknown> = {
         paymentType: paymentForm.paymentType,
         amount: parseFloat(paymentForm.amount),
-        includeItbms: paymentForm.includeItbms,
         paymentMethod: paymentForm.paymentMethod,
         status: 'PAGADO',
         dueDate: paymentForm.dueDate,
@@ -502,7 +499,6 @@ export default function InquilinosPage() {
       propertyId: contextPropertyId,
       receiptImage: '',
       receiptFileName: '',
-      includeItbms: false,
     })
     setSelectedTenant(null)
   }
@@ -1015,23 +1011,6 @@ export default function InquilinosPage() {
                   required
                 />
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <Switch
-                    id="includeItbms"
-                    checked={paymentForm.includeItbms}
-                    onCheckedChange={(checked) => setPaymentForm({...paymentForm, includeItbms: checked})}
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="includeItbms" className="font-medium cursor-pointer">
-                      Incluir ITBMS (7%)
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Activa esta opción si el pago incluye el Impuesto de Transferencia de Bienes Muebles y Servicios
-                    </p>
-                  </div>
-                </div>
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="paymentReference">Número de Referencia</Label>
                 <Input
@@ -1128,19 +1107,10 @@ export default function InquilinosPage() {
                     <span className="text-muted-foreground">Monto base:</span>
                     <span>${parseFloat(paymentForm.amount).toLocaleString()}</span>
                   </div>
-                  {paymentForm.includeItbms && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">ITBMS (7%):</span>
-                      <span>${(parseFloat(paymentForm.amount) * 0.07).toFixed(2)}</span>
-                    </div>
-                  )}
                   <div className="flex justify-between font-bold pt-2 border-t">
                     <span>Total:</span>
                     <span className="text-primary">
-                      ${paymentForm.includeItbms 
-                        ? (parseFloat(paymentForm.amount) * 1.07).toFixed(2)
-                        : parseFloat(paymentForm.amount).toLocaleString()
-                      }
+                      ${parseFloat(paymentForm.amount).toLocaleString()}
                     </span>
                   </div>
                 </div>

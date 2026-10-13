@@ -91,12 +91,6 @@ export default function MiContratoPage() {
                       <p className="text-xl font-bold">$2,500.00</p>
                     </CardContent>
                   </Card>
-                  <Card className="bg-muted/50">
-                    <CardContent className="pt-4">
-                      <p className="text-sm text-muted-foreground">ITBMS incluido</p>
-                      <p className="text-xl font-bold">$175.00</p>
-                    </CardContent>
-                  </Card>
                 </div>
 
                 <div className="flex justify-end">

@@ -215,10 +215,7 @@ export function InquilinoDashboard({ userId: propUserId }: InquilinoDashboardPro
   const contract = data?.contract
   const nextPayment = data?.nextPayment
 
-  // Calculate rent with ITBMS (7%)
   const monthlyRent = property?.monthlyRent || 0
-  const itbms = Math.round(monthlyRent * 0.07)
-  const total = monthlyRent + itbms
 
   // Get selected tenant name
   const selectedTenant = tenants.find(t => t.id === selectedTenantId)
@@ -360,12 +357,8 @@ export function InquilinoDashboard({ userId: propUserId }: InquilinoDashboardPro
                         <p className="text-xl font-bold">${monthlyRent.toLocaleString()}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">ITBMS (7%)</p>
-                        <p className="text-xl font-bold">${itbms}</p>
-                      </div>
-                      <div>
                         <p className="text-sm text-muted-foreground">Total mensual</p>
-                        <p className="text-xl font-bold text-primary">${total.toLocaleString()}</p>
+                        <p className="text-xl font-bold text-primary">${monthlyRent.toLocaleString()}</p>
                       </div>
                     </div>
                   </>

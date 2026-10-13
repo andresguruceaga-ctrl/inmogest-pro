@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   fixedExpenseAutomationKey,
+  isRecurringExpenseActiveForPeriod,
   isRecurringExpenseDue,
   monthlyAutomationDates,
   runMonthlyAutomation,
@@ -47,6 +48,15 @@ test('respeta frecuencias mensuales, trimestrales, cuatrimestrales, semestrales 
   assert.equal(isRecurringExpenseDue(createdAt, 6, { year: 2026, month: 7 }), true)
   assert.equal(isRecurringExpenseDue(createdAt, 12, { year: 2027, month: 1 }), true)
   assert.equal(isRecurringExpenseDue(createdAt, 3, { year: 2026, month: 3 }), false)
+})
+
+test('respeta las fechas de inicio y finalización de un gasto recurrente', () => {
+  const start = new Date('2026-03-01T12:00:00.000Z')
+  const end = new Date('2026-08-31T23:59:59.999Z')
+
+  assert.equal(isRecurringExpenseActiveForPeriod(start, end, new Date('2026-02-01T12:00:00.000Z'), new Date('2026-02-28T12:00:00.000Z')), false)
+  assert.equal(isRecurringExpenseActiveForPeriod(start, end, new Date('2026-08-01T12:00:00.000Z'), new Date('2026-08-31T12:00:00.000Z')), true)
+  assert.equal(isRecurringExpenseActiveForPeriod(start, end, new Date('2026-09-01T12:00:00.000Z'), new Date('2026-09-30T12:00:00.000Z')), false)
 })
 
 test('una segunda ejecución no duplica gastos ni pagos', async () => {

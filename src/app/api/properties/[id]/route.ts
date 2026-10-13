@@ -4,6 +4,21 @@ import { z } from 'zod';
 import { requireApiUser } from '@/lib/api-auth';
 import { canAccessProperty } from '@/lib/authorization';
 
+const recurringExpenseSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1, 'El nombre del gasto fijo es requerido'),
+  description: z.string().optional().nullable(),
+  category: z.enum(['MANTENIMIENTO_PH', 'SEGURO', 'SERVICIOS_BASICOS', 'REPARACION', 'SERVICIO_TECNICO', 'IMPUESTOS', 'COMISION_ADMIN', 'OTROS']),
+  amount: z.number().positive('El monto del gasto fijo debe ser mayor que cero'),
+  frequencyMonths: z.union([z.literal(1), z.literal(3), z.literal(4), z.literal(6), z.literal(12)]),
+  startsAt: z.string().date(),
+  endsAt: z.string().date().optional().nullable(),
+  paidByAdmin: z.boolean(),
+}).refine(expense => !expense.startsAt || !expense.endsAt || expense.endsAt >= expense.startsAt, {
+  message: 'La fecha final debe ser igual o posterior a la fecha inicial',
+  path: ['endsAt'],
+});
+
 // Esquema de validación para actualizar propiedad
 const updatePropertySchema = z.object({
   title: z.string().min(1, 'El título es requerido').optional(),
@@ -23,6 +38,15 @@ const updatePropertySchema = z.object({
   neighborhood: z.string().optional().nullable(),
   address: z.string().min(1, 'La dirección es requerida').optional(),
   buildingName: z.string().optional().nullable(),
+  hasTerrace: z.boolean().optional(),
+  hasBalcony: z.boolean().optional(),
+  hasDen: z.boolean().optional(),
+  hasSocialArea: z.boolean().optional(),
+  socialAreaDescription: z.string().optional().nullable(),
+  hasMaidRoomBathroom: z.boolean().optional(),
+  phContactName: z.string().optional().nullable(),
+  phContactPhone: z.string().optional().nullable(),
+  phContactEmail: z.union([z.string().email('El correo del PH no es válido'), z.literal('')]).optional().nullable(),
   totalArea: z.number().positive('El área total debe ser positiva').optional(),
   builtArea: z.number().positive().optional().nullable(),
   bedrooms: z.number().int().min(0).optional(),
@@ -33,8 +57,7 @@ const updatePropertySchema = z.object({
   tomoNumber: z.string().optional().nullable(),
   folioNumber: z.string().optional().nullable(),
   asientoNumber: z.string().optional().nullable(),
-  monthlyRent: z.number().positive('El alquiler mensual debe ser positivo').optional(),
-  itbmsRate: z.number().min(0).max(100).optional(),
+  monthlyRent: z.number().min(0, 'El alquiler mensual debe ser válido').optional(),
   depositAmount: z.number().min(0).optional().nullable(),
   status: z.enum(['DISPONIBLE', 'OCUPADA', 'MANTENIMIENTO', 'INACTIVA']).optional(),
   mainImage: z.string().optional().nullable(),
@@ -43,6 +66,7 @@ const updatePropertySchema = z.object({
   adminId: z.string().optional(),
   tenantId: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
+  recurringExpenses: z.array(recurringExpenseSchema).optional(),
 });
 
 // GET - Detalle de propiedad
@@ -173,10 +197,6 @@ export async function GET(
       ? property.contracts.filter(contract => contract.tenantId === auth.user.id)
       : property.contracts;
 
-    // Calcular ITBMS y totales
-    const itbmsAmount = property.monthlyRent * (property.itbmsRate / 100);
-    const totalRentWithITBMS = property.monthlyRent + itbmsAmount;
-
     // Calcular totales de gastos
     const totalExpenses = visibleExpenses.reduce(
       (sum, expense) => sum + expense.amount,
@@ -201,8 +221,6 @@ export async function GET(
         supportTickets: visibleTickets,
         contracts: visibleContracts,
         financialReports: isTenant ? [] : property.financialReports,
-        itbmsAmount,
-        totalRentWithITBMS,
         summary: {
           totalExpenses,
           totalPendingPayments: totalPending,
@@ -313,49 +331,67 @@ export async function PUT(
       }
     }
 
-    // Actualizar la propiedad
-    const property = await prisma.property.update({
-      where: { id },
-      data: validatedData,
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
+    const { recurringExpenses, ...propertyData } = validatedData;
+    const property = await prisma.$transaction(async tx => {
+      await tx.property.update({
+        where: { id },
+        data: {
+          ...propertyData,
+          socialAreaDescription: propertyData.hasSocialArea === false ? null : propertyData.socialAreaDescription,
+          phContactEmail: propertyData.phContactEmail === undefined ? undefined : propertyData.phContactEmail || null,
         },
-        admin: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-    });
+      });
 
-    // Calcular ITBMS actualizado
-    const itbmsAmount = property.monthlyRent * (property.itbmsRate / 100);
-    const totalRentWithITBMS = property.monthlyRent + itbmsAmount;
+      if (recurringExpenses) {
+        const existingTemplates = await tx.recurringExpense.findMany({
+          where: { propertyId: id },
+          select: { id: true },
+        });
+        const existingIds = new Set(existingTemplates.map(template => template.id));
+        const submittedIds = recurringExpenses.flatMap(expense => expense.id ? [expense.id] : []);
+        if (submittedIds.some(templateId => !existingIds.has(templateId))) {
+          throw new Error('Uno de los gastos recurrentes no pertenece a esta propiedad');
+        }
+
+        await tx.recurringExpense.updateMany({
+          where: { propertyId: id, id: { notIn: submittedIds } },
+          data: { isActive: false },
+        });
+
+        for (const expense of recurringExpenses) {
+          const templateData = {
+            title: expense.title,
+            description: expense.description || null,
+            category: expense.category,
+            amount: expense.amount,
+            frequencyMonths: expense.frequencyMonths,
+            startsAt: expense.startsAt ? new Date(`${expense.startsAt}T00:00:00.000Z`) : null,
+            endsAt: expense.endsAt ? new Date(`${expense.endsAt}T23:59:59.999Z`) : null,
+            paidByAdmin: expense.paidByAdmin,
+            isActive: true,
+          };
+          if (expense.id) {
+            await tx.recurringExpense.update({ where: { id: expense.id }, data: templateData });
+          } else {
+            await tx.recurringExpense.create({ data: { ...templateData, propertyId: id } });
+          }
+        }
+      }
+
+      return tx.property.findUniqueOrThrow({
+        where: { id },
+        include: {
+          owner: { select: { id: true, name: true, email: true, phone: true } },
+          admin: { select: { id: true, name: true, email: true, phone: true } },
+          tenant: { select: { id: true, name: true, email: true, phone: true } },
+          recurringExpenses: { where: { isActive: true }, orderBy: { createdAt: 'asc' } },
+        },
+      });
+    });
 
     return NextResponse.json({
       success: true,
-      data: {
-        ...property,
-        itbmsAmount,
-        totalRentWithITBMS,
-      },
+      data: property,
       message: 'Propiedad actualizada exitosamente',
     });
   } catch (error) {

@@ -32,54 +32,63 @@ model User {
 }
 
 model Property {
-  id                String             @id @default(cuid())
-  title             String
-  description       String?
-  propertyType      PropertyType       @default(APARTAMENTO)
-  province          String
-  district          String
-  corregimiento     String?
-  neighborhood      String?
-  address           String
-  buildingName      String?
-  totalArea         Float
-  builtArea         Float?
-  bedrooms          Int
-  bathrooms         Int
-  parkingSpaces     Int
-  floorNumber       Int?
-  fincaNumber       String
-  tomoNumber        String?
-  folioNumber       String?
-  asientoNumber     String?
-  monthlyRent       Float
-  itbmsRate         Float              @default(7.0)
-  depositAmount     Float
-  status            PropertyStatus     @default(DISPONIBLE)
-  isActive          Boolean            @default(true)
-  mainImage         String?
-  images            String?
-  comments          String?
-  forSale           Boolean            @default(false)
-  salePrice         Float?
-  saleDescription   String?
-  forRent           Boolean            @default(true)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  ownerId           String
-  adminId           String
-  tenantId          String?
-  contracts         Contract[]
-  documents         Document[]
-  expenses          Expense[]
-  recurringExpenses RecurringExpense[]
-  financialReports  FinancialReport[]
-  payments          Payment[]
-  admin             User               @relation("AdminProperties", fields: [adminId], references: [id], onDelete: Cascade)
-  owner             User               @relation("OwnerProperties", fields: [ownerId], references: [id], onDelete: Cascade)
-  tenant            User?              @relation("TenantProperties", fields: [tenantId], references: [id])
-  supportTickets    SupportTicket[]
-  ownerPayments     OwnerPayment[]
+  id                    String             @id @default(cuid())
+  title                 String
+  description           String?
+  propertyType          PropertyType       @default(APARTAMENTO)
+  province              String
+  district              String
+  corregimiento         String?
+  neighborhood          String?
+  address               String
+  buildingName          String?
+  hasTerrace            Boolean            @default(false)
+  hasBalcony            Boolean            @default(false)
+  hasDen                Boolean            @default(false)
+  hasSocialArea         Boolean            @default(false)
+  socialAreaDescription String?
+  hasMaidRoomBathroom   Boolean            @default(false)
+  phContactName         String?
+  phContactPhone        String?
+  phContactEmail        String?
+  totalArea             Float
+  builtArea             Float?
+  bedrooms              Int
+  bathrooms             Int
+  parkingSpaces         Int
+  floorNumber           Int?
+  fincaNumber           String
+  tomoNumber            String?
+  folioNumber           String?
+  asientoNumber         String?
+  monthlyRent           Float
+  itbmsRate             Float              @default(7.0)
+  depositAmount         Float
+  status                PropertyStatus     @default(DISPONIBLE)
+  isActive              Boolean            @default(true)
+  mainImage             String?
+  images                String?
+  comments              String?
+  forSale               Boolean            @default(false)
+  salePrice             Float?
+  saleDescription       String?
+  forRent               Boolean            @default(true)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  ownerId               String
+  adminId               String
+  tenantId              String?
+  contracts             Contract[]
+  documents             Document[]
+  expenses              Expense[]
+  recurringExpenses     RecurringExpense[]
+  financialReports      FinancialReport[]
+  payments              Payment[]
+  admin                 User               @relation("AdminProperties", fields: [adminId], references: [id], onDelete: Cascade)
+  owner                 User               @relation("OwnerProperties", fields: [ownerId], references: [id], onDelete: Cascade)
+  tenant                User?              @relation("TenantProperties", fields: [tenantId], references: [id])
+  supportTickets        SupportTicket[]
+  ownerPayments         OwnerPayment[]
 
   @@index([ownerId])
   @@index([adminId])
@@ -159,6 +168,8 @@ model RecurringExpense {
   category        ExpenseCategory
   amount          Float
   frequencyMonths Int             @default(1)
+  startsAt        DateTime?
+  endsAt          DateTime?
   paidByAdmin     Boolean         @default(false)
   isActive        Boolean         @default(true)
   createdAt       DateTime        @default(now())

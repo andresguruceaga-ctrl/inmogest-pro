@@ -978,7 +978,6 @@ export default function PropietariosPage() {
                       <p className="text-xl font-bold text-emerald-500">
                         +${dashboardData.stats.monthIncome.toLocaleString()}
                       </p>
-                      <p className="text-xs text-muted-foreground">ITBMS: ${dashboardData.stats.monthItbms.toLocaleString()}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Costos Fijos</p>

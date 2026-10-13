@@ -245,7 +245,7 @@ export async function buildFinancialWorkbook(data: FinancialWorkbookData): Promi
   instructions.getRow(7).values = ['Hoja', 'Contenido']
   instructions.getRow(7).font = headerFont
   instructions.getRow(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${headerFill}` } }
-  instructions.getRow(8).values = ['Gastos', 'Gastos pagados o no por el administrador. Los gastos nunca suman ITBMS.']
+  instructions.getRow(8).values = ['Gastos', 'Gastos gestionados o no por el administrador.']
   instructions.getRow(9).values = ['Pagos inquilinos', 'Pagos y cuentas por cobrar relacionadas con inquilinos.']
   instructions.getRow(10).values = ['Pagos propietario', 'Abonos del propietario para la relación de gastos.']
   for (let row = 3; row <= 10; row += 1) {

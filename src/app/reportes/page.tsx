@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
-  Download, TrendingUp, TrendingDown, DollarSign, Receipt, BarChart3, 
+  Download, TrendingUp, TrendingDown, DollarSign, BarChart3,
   Building2, Calendar, ChevronDown, ChevronUp, Loader2, FileText,
   ArrowUpRight, ArrowDownRight, Eye, AlertCircle, ChevronRight, Sparkles,
   HelpCircle, Clock, CheckCircle, AlertTriangle, Printer, Wallet
@@ -1305,36 +1305,6 @@ const handleDownloadPDF = () => {
                   </CardContent>
                 </Card>
 
-                {/* Tax Summary */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Receipt className="h-5 w-5" />
-                      Resumen ITBMS
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <div className="p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
-                        <p className="text-sm text-muted-foreground">ITBMS Recaudado</p>
-                        <p className="text-xl font-bold text-emerald-500">{formatCurrency(reportData.totals.itbmsCollected)}</p>
-                        <p className="text-xs text-muted-foreground mt-1">De pagos recibidos</p>
-                      </div>
-                      <div className="p-4 rounded-lg bg-red-500/5 border border-red-500/10">
-                        <p className="text-sm text-muted-foreground">ITBMS Pagado</p>
-                        <p className="text-xl font-bold text-red-500">{formatCurrency(reportData.totals.itbmsPaid)}</p>
-                        <p className="text-xs text-muted-foreground mt-1">Los gastos no incorporan ITBMS</p>
-                      </div>
-                      <div className="p-4 rounded-lg bg-primary/5 border border-primary/10">
-                        <p className="text-sm text-muted-foreground">Balance ITBMS</p>
-                        <p className="text-xl font-bold text-primary">
-                          {formatCurrency(reportData.totals.itbmsCollected - reportData.totals.itbmsPaid)}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">A declarar</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
                   </>
                 ) : (
                   <OwnerBalanceReport

@@ -75,6 +75,15 @@ model Property {
   neighborhood  String?
   address       String
   buildingName  String?
+  hasTerrace    Boolean      @default(false)
+  hasBalcony    Boolean      @default(false)
+  hasDen        Boolean      @default(false)
+  hasSocialArea Boolean      @default(false)
+  socialAreaDescription String?
+  hasMaidRoomBathroom Boolean @default(false)
+  phContactName String?
+  phContactPhone String?
+  phContactEmail String?
 
   // Características
   totalArea     Float
@@ -223,6 +232,8 @@ model RecurringExpense {
   category    ExpenseCategory
   amount      Float
   frequencyMonths Int         @default(1)
+  startsAt    DateTime?
+  endsAt      DateTime?
   paidByAdmin Boolean         @default(false)
   isActive    Boolean         @default(true)
   createdAt   DateTime        @default(now())
