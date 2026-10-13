@@ -120,6 +120,7 @@ interface ReportData {
     category: string | null
     status: string
     priority: string
+    dueDate: string | null
     createdAt: string
     property: { id: string; title: string; address: string }
   }>
@@ -1025,7 +1026,7 @@ const handleDownloadPDF = () => {
                               <TableHead className="hidden md:table-cell">Descripción</TableHead>
                               <TableHead>Estado</TableHead>
                               <TableHead>Prioridad</TableHead>
-                              <TableHead className="hidden lg:table-cell">Fecha</TableHead>
+                              <TableHead className="hidden lg:table-cell">Fecha estimada</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1054,7 +1055,9 @@ const handleDownloadPDF = () => {
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="hidden lg:table-cell text-muted-foreground">
-                                  {new Date(ticket.createdAt).toLocaleDateString('es-PA')}
+                                  {ticket.dueDate
+                                    ? new Date(ticket.dueDate).toLocaleDateString('es-PA')
+                                    : 'Sin fecha estimada'}
                                 </TableCell>
                               </TableRow>
                             ))}

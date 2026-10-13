@@ -133,12 +133,15 @@ export async function GET(request: NextRequest) {
     const tickets = await prisma.supportTicket.findMany({
       where: {
         propertyId: { in: propertyIds },
-        createdAt: { gte: startDate, lte: endDate }
+        OR: [
+          { dueDate: { gte: startDate, lte: endDate } },
+          { dueDate: null, createdAt: { gte: startDate, lte: endDate } },
+        ],
       },
       include: {
         property: { select: { id: true, title: true, address: true } }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }]
     })
 
     // ========== OWNER BALANCE DATA ==========

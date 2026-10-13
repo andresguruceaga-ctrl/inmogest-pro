@@ -31,6 +31,7 @@ interface Ticket {
   photos: string | null
   attachments: string | null
   response: string | null
+  dueDate: string | null
   createdAt: string
   property: {
     id: string
@@ -616,7 +617,7 @@ export default function SoportePage() {
                         <TableHead className="hidden lg:table-cell">Solicitante</TableHead>
                         <TableHead>Prioridad</TableHead>
                         <TableHead>Estado</TableHead>
-                        <TableHead className="hidden md:table-cell">Fecha</TableHead>
+                        <TableHead className="hidden md:table-cell">Fecha estimada</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -643,7 +644,9 @@ export default function SoportePage() {
                           <TableCell>{getPriorityBadge(ticket.priority)}</TableCell>
                           <TableCell>{getStatusBadge(ticket.status)}</TableCell>
                           <TableCell className="hidden md:table-cell text-muted-foreground">
-                            {new Date(ticket.createdAt).toLocaleDateString('es-PA')}
+                            {ticket.dueDate
+                              ? new Date(ticket.dueDate).toLocaleDateString('es-PA')
+                              : 'Sin fecha estimada'}
                           </TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>
@@ -1019,9 +1022,19 @@ export default function SoportePage() {
                 </div>
               )}
               
-              <div>
-                <p className="text-sm text-muted-foreground">Fecha de Creacion</p>
-                <p>{new Date(selectedTicket.createdAt).toLocaleString('es-PA')}</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha estimada de realización</p>
+                  <p className="font-medium">
+                    {selectedTicket.dueDate
+                      ? new Date(selectedTicket.dueDate).toLocaleDateString('es-PA')
+                      : 'Sin fecha estimada'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha de creación</p>
+                  <p>{new Date(selectedTicket.createdAt).toLocaleString('es-PA')}</p>
+                </div>
               </div>
             </div>
           )}

@@ -1009,7 +1009,7 @@ export default function ContratosPage() {
                 <div>
                   <Label>Soportes recurrentes</Label>
                   <p className="text-xs text-muted-foreground">
-                    Se crearán automáticamente en Soporte según la frecuencia indicada.
+                    Se crearán automáticamente en Soporte con su fecha estimada durante la vigencia del contrato.
                   </p>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={addRecurringSupport}>
@@ -1042,7 +1042,7 @@ export default function ContratosPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`support-first-${support.id}`}>Primera fecha *</Label>
+                      <Label htmlFor={`support-first-${support.id}`}>Primera fecha estimada *</Label>
                       <Input
                         id={`support-first-${support.id}`}
                         type="date"

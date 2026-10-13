@@ -4,12 +4,27 @@ import {
   isMonthOnSchedule,
   parseRecurringSupports,
   recurringSupportAutomationKey,
+  recurringSupportDueDates,
 } from '../src/lib/contract-backfill.ts'
 
 test('un soporte cuatrimestral respeta el mes inicial', () => {
   const firstDate = new Date('2026-01-15T12:00:00.000Z')
   assert.equal(isMonthOnSchedule(firstDate, 4, new Date('2026-05-01T12:00:00.000Z')), true)
   assert.equal(isMonthOnSchedule(firstDate, 4, new Date('2026-04-01T12:00:00.000Z')), false)
+})
+
+test('crea las fechas estimadas futuras de un soporte durante todo el contrato', () => {
+  const dates = recurringSupportDueDates(
+    new Date('2026-01-15T12:00:00.000Z'),
+    4,
+    new Date('2026-01-01T12:00:00.000Z'),
+    new Date('2026-12-31T12:00:00.000Z')
+  )
+
+  assert.deepEqual(
+    dates.map(date => date.toISOString().slice(0, 10)),
+    ['2026-01-15', '2026-05-15', '2026-09-15']
+  )
 })
 
 test('las claves de soporte evitan duplicados al repetir la automatización', () => {

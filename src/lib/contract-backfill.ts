@@ -92,6 +92,20 @@ export function recurringSupportAutomationKey(contractId: string, index: number,
   return `contract-support:${contractId}:${index}:${period}`
 }
 
+export function recurringSupportDueDates(
+  firstDate: Date,
+  frequencyMonths: number,
+  contractStart: Date,
+  contractEnd: Date
+) {
+  if (Number.isNaN(firstDate.getTime()) || frequencyMonths < 1 || contractStart > contractEnd) return []
+
+  return monthsBetween(contractStart, contractEnd)
+    .filter(month => isMonthOnSchedule(firstDate, frequencyMonths, month))
+    .map(month => dateInMonth(month, firstDate.getUTCDate()))
+    .filter(dueDate => dueDate >= contractStart && dueDate <= contractEnd)
+}
+
 export async function backfillContractRecords(
   prisma: PrismaClient,
   contractId: string,
@@ -113,8 +127,9 @@ export async function backfillContractRecords(
   if (!contract) return result
 
   const rangeEnd = new Date(Math.min(contract.endDate.getTime(), now.getTime()))
-  if (contract.startDate > rangeEnd) return result
-  const months = monthsBetween(contract.startDate, rangeEnd)
+  const months = contract.startDate <= rangeEnd
+    ? monthsBetween(contract.startDate, rangeEnd)
+    : []
 
   const paymentUserId = contract.contractType === 'ARRENDAMIENTO'
     ? contract.tenantId
@@ -203,11 +218,14 @@ export async function backfillContractRecords(
         : contract.property.adminId
     if (!responsibleUserId) continue
 
-    for (const month of months) {
-      if (!isMonthOnSchedule(firstDate, support.frequencyMonths, month)) continue
-      const dueDate = dateInMonth(month, firstDate.getUTCDate())
-      if (dueDate < contract.startDate || dueDate > rangeEnd || dueDate > now) continue
-      const automationKey = recurringSupportAutomationKey(contract.id, index, monthPeriod(month))
+    const dueDates = recurringSupportDueDates(
+      firstDate,
+      support.frequencyMonths,
+      contract.startDate,
+      contract.endDate
+    )
+    for (const dueDate of dueDates) {
+      const automationKey = recurringSupportAutomationKey(contract.id, index, monthPeriod(dueDate))
       const existing = await prisma.supportTicket.findFirst({ where: { automationKey } })
       if (existing) continue
       await prisma.supportTicket.create({

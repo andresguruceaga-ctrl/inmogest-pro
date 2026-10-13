@@ -66,6 +66,7 @@ interface TicketData {
   category: string | null
   status: string
   priority: string
+  dueDate?: string | null
   createdAt: string
   property: { id: string; title: string; address: string }
 }
@@ -677,7 +678,7 @@ export function generateReportPDF(params: ReportPDFParams): jsPDF {
     doc.text('Propiedad', margin + 55, yPosition + 5)
     doc.text('Estado', margin + 110, yPosition + 5)
     doc.text('Prioridad', margin + 135, yPosition + 5)
-    doc.text('Fecha', pageWidth - margin - 25, yPosition + 5)
+    doc.text('Fecha estimada', pageWidth - margin - 25, yPosition + 5)
     yPosition += 8
 
     doc.setFont('helvetica', 'normal')
@@ -691,7 +692,7 @@ export function generateReportPDF(params: ReportPDFParams): jsPDF {
       doc.text(safeText(ticket.property?.title).substring(0, 20), margin + 55, yPosition + 4)
       doc.text(ticket.status || 'N/A', margin + 110, yPosition + 4)
       doc.text(ticket.priority || 'N/A', margin + 135, yPosition + 4)
-      doc.text(formatDate(ticket.createdAt), pageWidth - margin - 25, yPosition + 4)
+      doc.text(ticket.dueDate ? formatDate(ticket.dueDate) : 'Sin fecha', pageWidth - margin - 25, yPosition + 4)
       yPosition += 6
     })
     yPosition += 8
