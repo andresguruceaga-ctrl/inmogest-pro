@@ -1228,6 +1228,17 @@ export default function PropiedadesPage() {
                     required
                   />
                 </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="description">Descripción de la propiedad</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    placeholder="Describe la distribución, acabados, ubicación, vistas y principales ventajas de la propiedad."
+                    rows={5}
+                  />
+                  <p className="text-xs text-muted-foreground">Esta descripción aparecerá en el resumen y en la ficha PDF.</p>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="propertyType">Tipo de Propiedad *</Label>
                   <Select value={formData.propertyType} onValueChange={(v) => setFormData({...formData, propertyType: v})}>
@@ -1734,6 +1745,17 @@ export default function PropiedadesPage() {
                     placeholder="Ej: Apartamento Vista Mar en Paitilla"
                     required
                   />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="edit-description">Descripción de la propiedad</Label>
+                  <Textarea
+                    id="edit-description"
+                    value={editFormData.description}
+                    onChange={(e) => setEditFormData({...editFormData, description: e.target.value})}
+                    placeholder="Describe la distribución, acabados, ubicación, vistas y principales ventajas de la propiedad."
+                    rows={5}
+                  />
+                  <p className="text-xs text-muted-foreground">Esta descripción aparecerá en el resumen y en la ficha PDF.</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-propertyType">Tipo de Propiedad *</Label>
