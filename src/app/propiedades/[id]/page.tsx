@@ -193,12 +193,15 @@ export default function PropertyWorkspacePage() {
                             <Images className="h-4 w-4" />Foto {selectedImage + 1} de {imageUrls.length}
                           </span>
                         </div>
-                        {imageUrls.length > 1 && <div className="hidden grid-cols-2 gap-1 lg:grid">
+                        {imageUrls.length > 1 && <div
+                          className={`hidden gap-1 lg:grid ${imageUrls.length >= 5 ? 'grid-cols-2 grid-rows-2' : 'grid-cols-1'}`}
+                          style={imageUrls.length < 5 ? { gridTemplateRows: `repeat(${imageUrls.length - 1}, minmax(0, 1fr))` } : undefined}
+                        >
                           {imageUrls.slice(1, 5).map((url, index) => (
                             <button
                               type="button"
                               key={`${url}-${index}`}
-                              className={`relative min-h-52 overflow-hidden bg-slate-100 ${selectedImage === index + 1 ? 'ring-4 ring-inset ring-primary' : ''}`}
+                              className={`relative min-h-0 overflow-hidden bg-slate-100 ${selectedImage === index + 1 ? 'ring-4 ring-inset ring-primary' : ''}`}
                               onClick={() => setSelectedImage(index + 1)}
                             >
                               <img src={url} alt={`${property.title} - Miniatura ${index + 2}`} className="h-full w-full object-cover transition-transform duration-300 hover:scale-105" />
