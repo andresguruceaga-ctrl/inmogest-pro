@@ -16,7 +16,7 @@ import {
   Download, TrendingUp, TrendingDown, DollarSign, BarChart3,
   Building2, Calendar, ChevronDown, ChevronUp, Loader2, FileText,
   ArrowUpRight, ArrowDownRight, Eye, AlertCircle, ChevronRight, Sparkles,
-  HelpCircle, Clock, CheckCircle, AlertTriangle, Printer, Wallet
+  HelpCircle, Clock, CheckCircle, AlertTriangle, Printer, Wallet, RefreshCw
 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
@@ -26,6 +26,7 @@ import { useToast } from '@/hooks/use-toast'
 import { generateOwnerBalancePDF, generateReportPDF, type OwnerBalanceData } from '@/lib/pdf-utils'
 import { buildOwnerStatements } from '@/lib/owner-statement'
 import { cn } from '@/lib/utils'
+import { formatDisplayDate } from '@/lib/date-format'
 
 interface Owner {
   id: string
@@ -251,7 +252,7 @@ export default function ReportesPage() {
         params.append('propertyId', selectedPropertyId)
       }
 
-      const response = await fetch(`/api/reports?${params.toString()}`)
+      const response = await fetch(`/api/reports?${params.toString()}`, { cache: 'no-store' })
       const data = await response.json()
 
       if (response.ok && data.success) {
@@ -306,6 +307,20 @@ export default function ReportesPage() {
       queueMicrotask(() => void fetchReport())
     }
   }, [period, selectedMonth, selectedYear, selectedOwnerId, selectedPropertyId, isInitialized])
+
+  useEffect(() => {
+    if (!isInitialized) return
+
+    const refreshVisibleReport = () => {
+      if (document.visibilityState === 'visible') void fetchReport()
+    }
+    window.addEventListener('focus', refreshVisibleReport)
+    document.addEventListener('visibilitychange', refreshVisibleReport)
+    return () => {
+      window.removeEventListener('focus', refreshVisibleReport)
+      document.removeEventListener('visibilitychange', refreshVisibleReport)
+    }
+  }, [isInitialized, period, selectedMonth, selectedYear, selectedOwnerId, selectedPropertyId])
 
   // Reset property selection when owner changes
   useEffect(() => {
@@ -487,7 +502,7 @@ const handleDownloadPDF = () => {
       const safeScope = scopeName.replace(/[^a-zA-Z0-9]/g, '_')
       const doc = generateOwnerBalancePDF({
         title: `Relación de gastos - ${scopeName}`,
-        period: `Saldo acumulado al ${new Date().toLocaleDateString('es-PA')}`,
+        period: `Saldo acumulado al ${formatDisplayDate(new Date())}`,
         data: reportData.ownerBalance,
       })
 
@@ -583,6 +598,15 @@ const handleDownloadPDF = () => {
                 </div>
               </div>
               <div className="no-print mt-6 flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  className="border-white/40 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                  onClick={() => void fetchReport()}
+                  disabled={loading || !isInitialized}
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                  Actualizar datos
+                </Button>
                 <Button className="bg-white text-[#126b73] hover:bg-cyan-50" onClick={() => window.print()} disabled={!reportData || loading}>
                   <Printer className="mr-2 h-4 w-4" />
                   Imprimir / Guardar PDF
@@ -883,7 +907,7 @@ const handleDownloadPDF = () => {
                                     </Badge>
                                   </TableCell>
                                   <TableCell className="text-muted-foreground">
-                                    {new Date(expense.date).toLocaleDateString('es-PA')}
+                                    {formatDisplayDate(expense.date)}
                                   </TableCell>
                                   <TableCell className="text-right font-medium">
                                     {formatCurrency(expense.amount)}
@@ -1056,7 +1080,7 @@ const handleDownloadPDF = () => {
                                 </TableCell>
                                 <TableCell className="hidden lg:table-cell text-muted-foreground">
                                   {ticket.dueDate
-                                    ? new Date(ticket.dueDate).toLocaleDateString('es-PA')
+                                    ? formatDisplayDate(ticket.dueDate)
                                     : 'Sin fecha estimada'}
                                 </TableCell>
                               </TableRow>
@@ -1158,7 +1182,7 @@ const handleDownloadPDF = () => {
                                     <div>
                                       <p className="text-xs text-muted-foreground">Vigencia</p>
                                       <p className="font-medium">
-                                        {new Date(prop.contract.startDate).toLocaleDateString('es-PA')} – {new Date(prop.contract.endDate).toLocaleDateString('es-PA')}
+                                        {formatDisplayDate(prop.contract.startDate)} – {formatDisplayDate(prop.contract.endDate)}
                                       </p>
                                     </div>
                                     <div>
@@ -1201,7 +1225,7 @@ const handleDownloadPDF = () => {
                                                   </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-muted-foreground">
-                                                  {new Date(expense.date).toLocaleDateString('es-PA')}
+                                                  {formatDisplayDate(expense.date)}
                                                 </TableCell>
                                                 <TableCell className="text-right font-medium">
                                                   {formatCurrency(expense.amount)}
@@ -1247,7 +1271,7 @@ const handleDownloadPDF = () => {
                                                   </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-muted-foreground">
-                                                  {new Date(expense.date).toLocaleDateString('es-PA')}
+                                                  {formatDisplayDate(expense.date)}
                                                 </TableCell>
                                                 <TableCell className="text-right font-medium">
                                                   {formatCurrency(expense.amount)}
@@ -1431,7 +1455,7 @@ function OwnerBalanceReport({
                   <TableBody>
                     {statement.movements.map(movement => (
                       <TableRow key={`${movement.type}-${movement.id}`}>
-                        <TableCell className="whitespace-nowrap text-muted-foreground">{new Date(movement.date).toLocaleDateString('es-PA')}</TableCell>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">{formatDisplayDate(movement.date)}</TableCell>
                         <TableCell>{movement.description}</TableCell>
                         <TableCell>
                           <Badge variant={movement.type === 'GASTO' ? 'outline' : 'secondary'} className="whitespace-nowrap text-xs">

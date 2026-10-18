@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
+import { formatDisplayDate } from '@/lib/date-format'
 
 interface Ticket {
   id: string
@@ -645,7 +646,7 @@ export default function SoportePage() {
                           <TableCell>{getStatusBadge(ticket.status)}</TableCell>
                           <TableCell className="hidden md:table-cell text-muted-foreground">
                             {ticket.dueDate
-                              ? new Date(ticket.dueDate).toLocaleDateString('es-PA')
+                              ? formatDisplayDate(ticket.dueDate)
                               : 'Sin fecha estimada'}
                           </TableCell>
                           <TableCell className="text-right">
@@ -1027,13 +1028,13 @@ export default function SoportePage() {
                   <p className="text-sm text-muted-foreground">Fecha estimada de realización</p>
                   <p className="font-medium">
                     {selectedTicket.dueDate
-                      ? new Date(selectedTicket.dueDate).toLocaleDateString('es-PA')
+                      ? formatDisplayDate(selectedTicket.dueDate)
                       : 'Sin fecha estimada'}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Fecha de creación</p>
-                  <p>{new Date(selectedTicket.createdAt).toLocaleString('es-PA')}</p>
+                  <p>{formatDisplayDate(selectedTicket.createdAt)}</p>
                 </div>
               </div>
             </div>

@@ -40,7 +40,6 @@ export function daysInMonth(year: number, month: number) {
 
 export function monthlyAutomationDates(now = new Date()) {
   const current = datePartsInPanama(now)
-  const expenseDay = Math.min(30, daysInMonth(current.year, current.month))
 
   return {
     current,
@@ -48,8 +47,8 @@ export function monthlyAutomationDates(now = new Date()) {
     monthStart: utcCalendarDate(current.year, current.month, 1),
     monthEnd: utcCalendarDate(current.year, current.month, daysInMonth(current.year, current.month)),
     tenantPaymentDueDate: utcCalendarDate(current.year, current.month, 7),
-    fixedExpenseDate: utcCalendarDate(current.year, current.month, expenseDay),
-    canCreateFixedExpenses: current.day >= expenseDay,
+    fixedExpenseDate: utcCalendarDate(current.year, current.month, 1),
+    canCreateFixedExpenses: true,
   }
 }
 

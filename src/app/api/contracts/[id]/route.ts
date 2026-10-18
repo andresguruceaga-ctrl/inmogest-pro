@@ -226,6 +226,7 @@ export async function PUT(
       updateData.recurringSupports = validatedData.recurringSupports.length
         ? JSON.stringify(validatedData.recurringSupports)
         : null;
+
     }
 
     // Validar fechas si ambas están presentes
@@ -270,6 +271,17 @@ export async function PUT(
         },
       },
     });
+
+    if (validatedData.recurringSupports !== undefined) {
+      await prisma.supportTicket.deleteMany({
+        where: {
+          contractId: id,
+          automationKey: { startsWith: 'contract-support:' },
+          status: { in: ['ABIERTO', 'EN_PROCESO'] },
+          dueDate: { gte: new Date() },
+        },
+      });
+    }
 
     const generated = await backfillContractRecords(prisma, contract.id);
 

@@ -162,6 +162,13 @@ export async function PUT(
     if (validatedData.paidAt !== undefined) {
       updateData.paidAt = validatedData.paidAt ? new Date(validatedData.paidAt) : null;
     }
+    if (
+      validatedData.status === 'PAGADO' &&
+      !validatedData.paidAt &&
+      !existingPayment.paidAt
+    ) {
+      updateData.paidAt = new Date();
+    }
     if (validatedData.dueDate) updateData.dueDate = new Date(validatedData.dueDate);
     if (validatedData.receiptImage !== undefined) updateData.receiptImage = validatedData.receiptImage;
     if (validatedData.propertyId) updateData.propertyId = validatedData.propertyId;

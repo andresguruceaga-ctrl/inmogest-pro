@@ -66,7 +66,14 @@ const updatePropertySchema = z.object({
   adminId: z.string().optional(),
   tenantId: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
+  forSale: z.boolean().optional(),
+  salePrice: z.number().min(0).nullable().optional(),
+  saleDescription: z.string().optional().nullable(),
+  forRent: z.boolean().optional(),
   recurringExpenses: z.array(recurringExpenseSchema).optional(),
+}).refine(property => property.forSale !== false || property.forRent !== false, {
+  message: 'La propiedad debe estar disponible para venta, alquiler o ambos',
+  path: ['forRent'],
 });
 
 // GET - Detalle de propiedad

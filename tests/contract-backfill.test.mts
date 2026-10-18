@@ -13,7 +13,7 @@ test('un soporte cuatrimestral respeta el mes inicial', () => {
   assert.equal(isMonthOnSchedule(firstDate, 4, new Date('2026-04-01T12:00:00.000Z')), false)
 })
 
-test('crea las fechas estimadas futuras de un soporte durante todo el contrato', () => {
+test('programa el soporte al cierre de cada período recurrente', () => {
   const dates = recurringSupportDueDates(
     new Date('2026-01-15T12:00:00.000Z'),
     4,
@@ -23,7 +23,7 @@ test('crea las fechas estimadas futuras de un soporte durante todo el contrato',
 
   assert.deepEqual(
     dates.map(date => date.toISOString().slice(0, 10)),
-    ['2026-01-15', '2026-05-15', '2026-09-15']
+    ['2026-04-30', '2026-08-31', '2026-12-31']
   )
 })
 

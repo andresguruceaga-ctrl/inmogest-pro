@@ -10,21 +10,21 @@ import {
 } from '../src/lib/monthly-automation.ts'
 import type { PrismaClient } from '@prisma/client'
 
-test('programa el alquiler para el día 7 y el gasto fijo para el día 30', () => {
+test('programa el alquiler para el día 7 y el gasto fijo al inicio del mes', () => {
   const dates = monthlyAutomationDates(new Date('2026-10-30T15:00:00.000Z'))
 
   assert.equal(dates.period, '2026-10')
   assert.equal(dates.tenantPaymentDueDate.toISOString().slice(0, 10), '2026-10-07')
-  assert.equal(dates.fixedExpenseDate.toISOString().slice(0, 10), '2026-10-30')
+  assert.equal(dates.fixedExpenseDate.toISOString().slice(0, 10), '2026-10-01')
   assert.equal(dates.canCreateFixedExpenses, true)
 })
 
-test('en febrero usa el último día disponible', () => {
+test('los gastos fijos pueden generarse desde el primer día de febrero', () => {
   const beforeClosing = monthlyAutomationDates(new Date('2028-02-28T15:00:00.000Z'))
   const atClosing = monthlyAutomationDates(new Date('2028-02-29T15:00:00.000Z'))
 
-  assert.equal(beforeClosing.fixedExpenseDate.toISOString().slice(0, 10), '2028-02-29')
-  assert.equal(beforeClosing.canCreateFixedExpenses, false)
+  assert.equal(beforeClosing.fixedExpenseDate.toISOString().slice(0, 10), '2028-02-01')
+  assert.equal(beforeClosing.canCreateFixedExpenses, true)
   assert.equal(atClosing.canCreateFixedExpenses, true)
 })
 

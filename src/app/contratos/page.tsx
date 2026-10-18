@@ -40,6 +40,7 @@ interface Contract {
   terms: string | null
   documentUrl: string | null
   attachments: string | null
+  recurringSupports: string | null
   status: string
   property: { id: string; title: string; address: string } | null
   owner: { id: string; name: string; email: string; phone?: string } | null
@@ -107,6 +108,7 @@ export default function ContratosPage() {
     status: 'VIGENTE' as typeof CONTRACT_STATUSES[number],
   })
   const [editAttachments, setEditAttachments] = useState<Attachment[]>([])
+  const [editRecurringSupports, setEditRecurringSupports] = useState<RecurringSupportForm[]>([])
   const [editUploading, setEditUploading] = useState(false)
 
   // Delete confirmation state
@@ -471,6 +473,7 @@ export default function ContratosPage() {
           status: editFormData.status,
           tenantId: editFormData.tenantId || null,
           attachments: editAttachments.length > 0 ? JSON.stringify(editAttachments) : null,
+          recurringSupports: editRecurringSupports.map(({ id: _id, ...support }) => support),
         }),
       })
 
@@ -655,6 +658,20 @@ export default function ContratosPage() {
     // Parsear attachments existentes
     const existingAttachments = parseAttachments(contract.attachments)
     setEditAttachments(existingAttachments)
+    try {
+      const parsedSupports = contract.recurringSupports ? JSON.parse(contract.recurringSupports) : []
+      setEditRecurringSupports(Array.isArray(parsedSupports) ? parsedSupports.map((support, index) => ({
+        id: `edit-${index}-${contract.id}`,
+        title: support.title || '',
+        category: support.category || 'Mantenimiento',
+        priority: support.priority || 'MEDIA',
+        responsibleParty: support.responsibleParty || 'INQUILINO',
+        frequencyMonths: Number(support.frequencyMonths) || 4,
+        firstDate: support.firstDate || startDateStr,
+      })) : [])
+    } catch {
+      setEditRecurringSupports([])
+    }
 
     setEditFormData({
       contractType,
@@ -707,6 +724,22 @@ export default function ContratosPage() {
 
   const updateRecurringSupport = (id: string, changes: Partial<RecurringSupportForm>) => {
     setRecurringSupports(current => current.map(item => item.id === id ? { ...item, ...changes } : item))
+  }
+
+  const addEditRecurringSupport = () => {
+    setEditRecurringSupports(current => [...current, {
+      id: `edit-${Date.now()}-${current.length}`,
+      title: '',
+      category: 'Mantenimiento',
+      priority: 'MEDIA',
+      responsibleParty: editFormData.contractType === 'ARRENDAMIENTO' ? 'INQUILINO' : 'PROPIETARIO',
+      frequencyMonths: 4,
+      firstDate: editFormData.startDate,
+    }])
+  }
+
+  const updateEditRecurringSupport = (id: string, changes: Partial<RecurringSupportForm>) => {
+    setEditRecurringSupports(current => current.map(item => item.id === id ? { ...item, ...changes } : item))
   }
 
   const formatDate = (dateStr: string) => {
@@ -1009,7 +1042,7 @@ export default function ContratosPage() {
                 <div>
                   <Label>Soportes recurrentes</Label>
                   <p className="text-xs text-muted-foreground">
-                    Se crearán automáticamente en Soporte con su fecha estimada durante la vigencia del contrato.
+                    Se crearán al final de cada período con su fecha estimada durante la vigencia del contrato.
                   </p>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={addRecurringSupport}>
@@ -1042,7 +1075,7 @@ export default function ContratosPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`support-first-${support.id}`}>Primera fecha estimada *</Label>
+                      <Label htmlFor={`support-first-${support.id}`}>Inicio del primer período *</Label>
                       <Input
                         id={`support-first-${support.id}`}
                         type="date"
@@ -1449,6 +1482,66 @@ export default function ContratosPage() {
                 onChange={(e) => setEditFormData({...editFormData, terms: e.target.value})}
                 placeholder="Condiciones del contrato..."
               />
+            </div>
+
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <Label>Soportes recurrentes</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Puedes cambiar actividad, frecuencia, responsable o inicio del ciclo. Las próximas fechas se recalcularán.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addEditRecurringSupport}>
+                  <Plus className="mr-2 h-4 w-4" /> Agregar soporte
+                </Button>
+              </div>
+              {editRecurringSupports.length === 0 ? (
+                <p className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">No hay soportes recurrentes.</p>
+              ) : editRecurringSupports.map((support, index) => (
+                <div key={support.id} className="space-y-3 rounded-lg bg-muted/40 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Soporte {index + 1}</span>
+                    <Button type="button" variant="ghost" size="icon" onClick={() => setEditRecurringSupports(current => current.filter(item => item.id !== support.id))} aria-label={`Eliminar soporte ${index + 1}`}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor={`edit-support-title-${support.id}`}>Actividad *</Label>
+                      <Input id={`edit-support-title-${support.id}`} value={support.title} onChange={(event) => updateEditRecurringSupport(support.id, { title: event.target.value })} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`edit-support-first-${support.id}`}>Inicio del primer período *</Label>
+                      <Input id={`edit-support-first-${support.id}`} type="date" value={support.firstDate} onChange={(event) => updateEditRecurringSupport(support.id, { firstDate: event.target.value })} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Frecuencia</Label>
+                      <Select value={String(support.frequencyMonths)} onValueChange={(value) => updateEditRecurringSupport(support.id, { frequencyMonths: Number(value) })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Mensual</SelectItem>
+                          <SelectItem value="3">Trimestral</SelectItem>
+                          <SelectItem value="4">Cada 4 meses</SelectItem>
+                          <SelectItem value="6">Semestral</SelectItem>
+                          <SelectItem value="12">Anual</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Responsable</Label>
+                      <Select value={support.responsibleParty} onValueChange={(value) => updateEditRecurringSupport(support.id, { responsibleParty: value as RecurringSupportForm['responsibleParty'] })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="INQUILINO">Inquilino</SelectItem>
+                          <SelectItem value="PROPIETARIO">Propietario</SelectItem>
+                          <SelectItem value="ADMINISTRADOR">Administrador</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Sección de Archivos Adjuntos en Edición */}

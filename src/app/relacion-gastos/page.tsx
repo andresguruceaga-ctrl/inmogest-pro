@@ -22,6 +22,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { formatDisplayDate } from '@/lib/date-format'
 
 // Interfaz para datos por propiedad
 interface PropertyBalance {
@@ -755,7 +756,7 @@ export default function RelacionGastosPage() {
                                         <TableBody>
                                           {startDateFilter && (
                                             <TableRow className="bg-muted/50">
-                                              <TableCell>{new Date(`${startDateFilter}T12:00:00`).toLocaleDateString('es-PA')}</TableCell>
+                                              <TableCell>{formatDisplayDate(`${startDateFilter}T12:00:00`)}</TableCell>
                                               <TableCell className="font-medium">Saldo anterior</TableCell>
                                               <TableCell>—</TableCell>
                                               <TableCell className="text-right">—</TableCell>
@@ -766,7 +767,7 @@ export default function RelacionGastosPage() {
                                           {propBalance.movements.map(movement => (
                                             <TableRow key={`${movement.type}-${movement.id}`}>
                                               <TableCell className="whitespace-nowrap text-muted-foreground">
-                                                {new Date(movement.date).toLocaleDateString('es-PA')}
+                                                {formatDisplayDate(movement.date)}
                                               </TableCell>
                                               <TableCell>{movement.description}</TableCell>
                                               <TableCell>

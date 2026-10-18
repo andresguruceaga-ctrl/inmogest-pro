@@ -10,7 +10,7 @@ const createPaymentSchema = z.object({
   referenceNumber: z.string().optional().nullable(),
   paymentMethod: z.enum(['TRANSFERENCIA', 'EFECTIVO', 'CHEQUE', 'TARJETA']).optional(),
   status: z.enum(['PENDIENTE', 'PAGADO', 'ATRASADO', 'PARCIAL', 'CANCELADO']).default('PENDIENTE'),
-  paidAt: z.string().optional().nullable().transform(val => val ? new Date(val) : new Date()),
+  paidAt: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
   dueDate: z.string().transform(val => new Date(val)),
   receiptImage: z.string().optional().nullable(),
   propertyId: z.string().min(1, 'La propiedad es requerida'),
@@ -262,7 +262,9 @@ export async function POST(request: NextRequest) {
         referenceNumber: validatedData.referenceNumber,
         paymentMethod: validatedData.paymentMethod,
         status: validatedData.status,
-        paidAt: validatedData.paidAt,
+        paidAt: validatedData.status === 'PAGADO'
+          ? validatedData.paidAt || new Date()
+          : validatedData.paidAt,
         dueDate: validatedData.dueDate,
         receiptImage: validatedData.receiptImage,
         propertyId: validatedData.propertyId,

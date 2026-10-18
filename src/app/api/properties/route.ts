@@ -70,6 +70,9 @@ const createPropertySchema = z.object({
   saleDescription: z.string().optional().nullable(),
   forRent: z.boolean().default(true),
   fixedExpenses: z.array(recurringExpenseSchema).default([]),
+}).refine(property => property.forSale || property.forRent, {
+  message: 'La propiedad debe estar disponible para venta, alquiler o ambos',
+  path: ['forRent'],
 });
 
 // GET - Listar propiedades

@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf'
 import { buildOwnerStatements } from '@/lib/owner-statement'
+import { formatDisplayDate } from '@/lib/date-format'
 
 interface ReportPropertyData {
   propertyId: string
@@ -139,7 +140,7 @@ export function generateReportPDF(params: ReportPDFParams): jsPDF {
   const formatDate = (dateString: string | undefined): string => {
     if (!dateString) return 'N/A'
     try {
-      return new Date(dateString).toLocaleDateString('es-PA')
+      return formatDisplayDate(dateString)
     } catch {
       return 'N/A'
     }
@@ -185,7 +186,7 @@ export function generateReportPDF(params: ReportPDFParams): jsPDF {
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
   doc.text('Periodo: ' + safeText(period), margin, yPosition)
-  doc.text('Generado: ' + new Date().toLocaleDateString('es-PA'), pageWidth - margin - 50, yPosition)
+  doc.text('Generado: ' + formatDisplayDate(new Date()), pageWidth - margin - 50, yPosition)
   yPosition += 15
 
   // ==================== ADMIN SUMMARY ====================
@@ -500,7 +501,7 @@ export function generateReportPDF(params: ReportPDFParams): jsPDF {
         checkNewPage(6)
         doc.setTextColor(60, 60, 60)
         
-        const dateStr = payment.date ? new Date(payment.date).toLocaleDateString('es-PA') : 'N/A'
+        const dateStr = formatDisplayDate(payment.date)
         doc.text(dateStr, margin + 3, yPosition + 4)
         doc.text(safeText(payment.propertyTitle).substring(0, 25), margin + 30, yPosition + 4)
         doc.text(safeText(payment.tenant || 'N/A').substring(0, 20), margin + 90, yPosition + 4)
@@ -896,7 +897,7 @@ export function generateOwnerBalancePDF(params: {
   const formatCurrency = (amount: number) => new Intl.NumberFormat('es-PA', {
     style: 'currency', currency: 'USD',
   }).format(Number.isFinite(amount) ? amount : 0)
-  const formatDate = (value: string) => new Date(value).toLocaleDateString('es-PA')
+  const formatDate = (value: string) => formatDisplayDate(value)
 
   const addHeader = () => {
     doc.setFillColor(18, 59, 74)
@@ -908,7 +909,7 @@ export function generateOwnerBalancePDF(params: {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(`Período: ${safeText(period)}`, margin, 25)
-    doc.text(`Generado: ${new Date().toLocaleDateString('es-PA')}`, pageWidth - margin, 25, { align: 'right' })
+    doc.text(`Generado: ${formatDisplayDate(new Date())}`, pageWidth - margin, 25, { align: 'right' })
   }
   const ensureSpace = (height: number) => {
     if (y + height > pageHeight - 18) {
@@ -1137,7 +1138,7 @@ export async function generateContractPDF(data: {
   doc.text(data.contract.contractType === 'ADMINISTRACION' ? 'CONTRATO DE ADMINISTRACION' : 'CONTRATO DE ARRENDAMIENTO', pageWidth / 2, 17, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9.5)
-  doc.text(`Contrato ${safeText(data.contract.contractNumber || data.contract.id)} · Generado ${new Date().toLocaleDateString('es-PA')}`, pageWidth / 2, 27, { align: 'center' })
+  doc.text(`Contrato ${safeText(data.contract.contractNumber || data.contract.id)} · Generado ${formatDisplayDate(new Date())}`, pageWidth / 2, 27, { align: 'center' })
   y = 49
 
   addSection('PROPIEDAD', [
@@ -1151,8 +1152,8 @@ export async function generateContractPDF(data: {
     ['Documento', data.contract.tenant.dni],
   ])
   addSection('CONDICIONES', [
-    ['Fecha de inicio', new Date(data.contract.startDate).toLocaleDateString('es-PA')],
-    ['Fecha de fin', new Date(data.contract.endDate).toLocaleDateString('es-PA')],
+    ['Fecha de inicio', formatDisplayDate(data.contract.startDate)],
+    ['Fecha de fin', formatDisplayDate(data.contract.endDate)],
     ['Alquiler mensual', `$${(data.contract.monthlyRent || 0).toFixed(2)}`],
     ['Deposito', `$${(data.contract.deposit || 0).toFixed(2)}`],
     ['Estado', data.contract.status || 'N/A'],

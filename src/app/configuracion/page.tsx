@@ -108,7 +108,7 @@ export default function ConfiguracionPage() {
               <CardHeader>
                 <CardTitle>Automatización mensual</CardTitle>
                 <CardDescription>
-                  Los alquileres se preparan en la primera semana y los gastos fijos el día 30 de cada mes.
+                  Los alquileres se preparan en la primera semana y los gastos fijos al inicio de cada mes.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

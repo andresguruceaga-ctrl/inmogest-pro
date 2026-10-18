@@ -253,6 +253,10 @@ export default function PropiedadesPage() {
     ownerId: '',
     adminId: '',
     status: 'DISPONIBLE',
+    forSale: false,
+    salePrice: '',
+    saleDescription: '',
+    forRent: true,
   })
 
   const [photos, setPhotos] = useState<PhotoPreview[]>([])
@@ -608,6 +612,10 @@ export default function PropiedadesPage() {
       ownerId: property.owner?.id || '',
       adminId: '',
       status: property.status,
+      forSale: property.forSale || false,
+      salePrice: property.salePrice != null ? String(property.salePrice) : '',
+      saleDescription: property.saleDescription || '',
+      forRent: property.forRent !== false,
     })
     setEditFixedExpenses((property.recurringExpenses || []).map(expense => ({
       id: expense.id,
@@ -629,6 +637,18 @@ export default function PropiedadesPage() {
     e.preventDefault()
     
     if (!selectedProperty) return
+    if (!editFormData.forRent && !editFormData.forSale) {
+      toast({ title: 'Error', description: 'Selecciona si la propiedad es para alquiler, venta o ambas.', variant: 'destructive' })
+      return
+    }
+    if (editFormData.forRent && !editFormData.monthlyRent) {
+      toast({ title: 'Error', description: 'Indica el precio de alquiler mensual.', variant: 'destructive' })
+      return
+    }
+    if (editFormData.forSale && !editFormData.salePrice) {
+      toast({ title: 'Error', description: 'Indica el precio de venta.', variant: 'destructive' })
+      return
+    }
 
     setSaving(true)
 
@@ -672,6 +692,10 @@ export default function PropiedadesPage() {
           depositAmount: parseFloat(editFormData.depositAmount) || 0,
           fincaNumber: editFormData.fincaNumber || null,
           status: editFormData.status,
+          forSale: editFormData.forSale,
+          salePrice: parseFloat(editFormData.salePrice) || null,
+          saleDescription: editFormData.saleDescription || null,
+          forRent: editFormData.forRent,
           mainImage,
           images,
           recurringExpenses: editFixedExpenses
@@ -752,6 +776,19 @@ export default function PropiedadesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!formData.forRent && !formData.forSale) {
+      toast({ title: 'Error', description: 'Selecciona si la propiedad es para alquiler, venta o ambas.', variant: 'destructive' })
+      return
+    }
+    if (formData.forRent && !formData.monthlyRent) {
+      toast({ title: 'Error', description: 'Indica el precio de alquiler mensual.', variant: 'destructive' })
+      return
+    }
+    if (formData.forSale && !formData.salePrice) {
+      toast({ title: 'Error', description: 'Indica el precio de venta.', variant: 'destructive' })
+      return
+    }
     
     if (!formData.ownerId) {
       toast({
@@ -920,6 +957,12 @@ export default function PropiedadesPage() {
     return found?.label || type
   }
 
+  const getPropertyPriceLabel = (property: Property) => {
+    if (property.forRent !== false) return `$${property.monthlyRent.toLocaleString()}/mes`
+    if (property.forSale && property.salePrice != null) return `$${property.salePrice.toLocaleString()}`
+    return 'Precio no indicado'
+  }
+
   const visibleProperties = properties.filter(property => {
     const query = searchQuery.trim().toLocaleLowerCase('es')
     if (!query) return true
@@ -1023,7 +1066,7 @@ export default function PropiedadesPage() {
                                 <h3 className="font-semibold leading-tight group-hover:text-primary">{property.title}</h3>
                                 <p className="mt-1 text-sm text-muted-foreground">{getPropertyTypeLabel(property.propertyType)}</p>
                               </div>
-                              <span className="whitespace-nowrap font-semibold">${property.monthlyRent.toLocaleString()}/mes</span>
+                              <span className="whitespace-nowrap font-semibold">{getPropertyPriceLabel(property)}</span>
                             </div>
                             <p className="mt-3 flex items-center gap-1 text-sm text-muted-foreground">
                               <MapPin className="h-4 w-4 shrink-0" />
@@ -1047,7 +1090,7 @@ export default function PropiedadesPage() {
                       <TableHead>Propiedad</TableHead>
                       <TableHead className="hidden md:table-cell">Ubicación</TableHead>
                       <TableHead className="hidden lg:table-cell">Características</TableHead>
-                      <TableHead>Alquiler</TableHead>
+                      <TableHead>Precio</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
@@ -1099,7 +1142,7 @@ export default function PropiedadesPage() {
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">
-                          ${property.monthlyRent.toLocaleString()}/mes
+                          {getPropertyPriceLabel(property)}
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(property.status)}
@@ -1153,6 +1196,24 @@ export default function PropiedadesPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <div>
+                <h4 className="text-sm font-medium">Destino de la propiedad *</h4>
+                <p className="mt-1 text-xs text-muted-foreground">Selecciona primero si se ofrecerá para alquiler, venta o ambas opciones.</p>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={formData.forRent} onChange={(e) => setFormData({...formData, forRent: e.target.checked})} className="rounded border-gray-300" /><span className="text-sm">Para alquiler</span></label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={formData.forSale} onChange={(e) => setFormData({...formData, forSale: e.target.checked})} className="rounded border-gray-300" /><span className="text-sm">Para venta</span></label>
+              </div>
+              {!formData.forRent && !formData.forSale && <p className="text-sm text-destructive">Selecciona al menos una opción.</p>}
+              {formData.forSale && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2"><Label htmlFor="salePrice">Precio de venta (USD) *</Label><Input id="salePrice" type="number" min="0" value={formData.salePrice} onChange={(e) => setFormData({...formData, salePrice: e.target.value})} required={formData.forSale} /></div>
+                  <div className="space-y-2 md:col-span-2"><Label htmlFor="saleDescription">Información adicional de venta</Label><Textarea id="saleDescription" value={formData.saleDescription} onChange={(e) => setFormData({...formData, saleDescription: e.target.value})} rows={2} /></div>
+                </div>
+              )}
+            </div>
+
             {/* Información básica */}
             <div className="space-y-4">
               <h4 className="font-medium text-sm text-muted-foreground">Información Básica</h4>
@@ -1343,27 +1404,8 @@ export default function PropiedadesPage() {
             <div className="space-y-4">
               <h4 className="font-medium text-sm text-muted-foreground">Información Financiera</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="monthlyRent">Alquiler Mensual (USD) *</Label>
-                  <Input
-                    id="monthlyRent"
-                    type="number"
-                    value={formData.monthlyRent}
-                    onChange={(e) => setFormData({...formData, monthlyRent: e.target.value})}
-                    placeholder="2500"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="depositAmount">Depósito en Garantía (USD)</Label>
-                  <Input
-                    id="depositAmount"
-                    type="number"
-                    value={formData.depositAmount}
-                    onChange={(e) => setFormData({...formData, depositAmount: e.target.value})}
-                    placeholder="2500"
-                  />
-                </div>
+                {formData.forRent && <div className="space-y-2"><Label htmlFor="monthlyRent">Alquiler Mensual (USD) *</Label><Input id="monthlyRent" type="number" min="0" value={formData.monthlyRent} onChange={(e) => setFormData({...formData, monthlyRent: e.target.value})} placeholder="2500" required /></div>}
+                {formData.forRent && <div className="space-y-2"><Label htmlFor="depositAmount">Depósito en Garantía (USD)</Label><Input id="depositAmount" type="number" min="0" value={formData.depositAmount} onChange={(e) => setFormData({...formData, depositAmount: e.target.value})} placeholder="2500" /></div>}
               </div>
             </div>
 
@@ -1373,7 +1415,7 @@ export default function PropiedadesPage() {
                 <div>
                   <h4 className="font-medium text-sm">Gastos fijos recurrentes</h4>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Se registrarán automáticamente el día 30 según su frecuencia y durante las fechas indicadas.
+                    Se registrarán automáticamente al inicio del mes según su frecuencia y durante las fechas indicadas.
                   </p>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={addFixedExpense}>
@@ -1600,58 +1642,6 @@ export default function PropiedadesPage() {
               </div>
             </div>
 
-            {/* Interés en Venta/Alquiler */}
-            <div className="space-y-4">
-              <h4 className="font-medium text-sm text-muted-foreground">Interés en Venta/Alquiler</h4>
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.forRent}
-                      onChange={(e) => setFormData({...formData, forRent: e.target.checked})}
-                      className="rounded border-gray-300"
-                    />
-                    <span className="text-sm">Disponible para Alquiler</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.forSale}
-                      onChange={(e) => setFormData({...formData, forSale: e.target.checked})}
-                      className="rounded border-gray-300"
-                    />
-                    <span className="text-sm">Disponible para Venta</span>
-                  </label>
-                </div>
-                
-                {formData.forSale && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                    <div className="space-y-2">
-                      <Label htmlFor="salePrice">Precio de Venta (USD)</Label>
-                      <Input
-                        id="salePrice"
-                        type="number"
-                        value={formData.salePrice}
-                        onChange={(e) => setFormData({...formData, salePrice: e.target.value})}
-                        placeholder="250000"
-                      />
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label htmlFor="saleDescription">Información adicional de venta</Label>
-                      <Textarea
-                        id="saleDescription"
-                        value={formData.saleDescription}
-                        onChange={(e) => setFormData({...formData, saleDescription: e.target.value})}
-                        placeholder="Detalles adicionales sobre la venta..."
-                        rows={2}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* Asignación de Usuarios */}
             <div className="space-y-4">
               <h4 className="font-medium text-sm text-muted-foreground">Asignación de Usuarios</h4>
@@ -1713,6 +1703,24 @@ export default function PropiedadesPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditSubmit} className="space-y-6">
+            <div className="space-y-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <div>
+                <h4 className="text-sm font-medium">Destino de la propiedad *</h4>
+                <p className="mt-1 text-xs text-muted-foreground">Configura si se ofrece para alquiler, venta o ambas opciones.</p>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={editFormData.forRent} onChange={(e) => setEditFormData({...editFormData, forRent: e.target.checked})} className="rounded border-gray-300" /><span className="text-sm">Para alquiler</span></label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={editFormData.forSale} onChange={(e) => setEditFormData({...editFormData, forSale: e.target.checked})} className="rounded border-gray-300" /><span className="text-sm">Para venta</span></label>
+              </div>
+              {!editFormData.forRent && !editFormData.forSale && <p className="text-sm text-destructive">Selecciona al menos una opción.</p>}
+              {editFormData.forSale && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2"><Label htmlFor="edit-salePrice">Precio de venta (USD) *</Label><Input id="edit-salePrice" type="number" min="0" value={editFormData.salePrice} onChange={(e) => setEditFormData({...editFormData, salePrice: e.target.value})} required /></div>
+                  <div className="space-y-2 md:col-span-2"><Label htmlFor="edit-saleDescription">Información adicional de venta</Label><Textarea id="edit-saleDescription" value={editFormData.saleDescription} onChange={(e) => setEditFormData({...editFormData, saleDescription: e.target.value})} rows={2} /></div>
+                </div>
+              )}
+            </div>
+
             {/* Información básica */}
             <div className="space-y-4">
               <h4 className="font-medium text-sm text-muted-foreground">Información Básica</h4>
@@ -1900,7 +1908,7 @@ export default function PropiedadesPage() {
             <div className="space-y-4">
               <h4 className="font-medium text-sm text-muted-foreground">Información Financiera</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+                {editFormData.forRent && <div className="space-y-2">
                   <Label htmlFor="edit-monthlyRent">Alquiler Mensual (USD) *</Label>
                   <Input
                     id="edit-monthlyRent"
@@ -1910,7 +1918,7 @@ export default function PropiedadesPage() {
                     placeholder="2500"
                     required
                   />
-                </div>
+                </div>}
               </div>
             </div>
 

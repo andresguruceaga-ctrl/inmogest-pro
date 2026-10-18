@@ -119,8 +119,11 @@ export async function GET(request: NextRequest) {
     const payments = await prisma.payment.findMany({
       where: {
         status: 'PAGADO',
-        paidAt: { gte: startDate, lte: endDate },
-        propertyId: { in: propertyIds }
+        propertyId: { in: propertyIds },
+        OR: [
+          { paidAt: { gte: startDate, lte: endDate } },
+          { paidAt: null, updatedAt: { gte: startDate, lte: endDate } },
+        ],
       },
       include: {
         property: { select: { id: true, title: true } },
@@ -273,7 +276,7 @@ export async function GET(request: NextRequest) {
         paymentsDetails: propertyPayments.map(p => ({
           id: p.id,
           amount: p.totalAmount,
-          date: p.paidAt?.toISOString() || '',
+          date: (p.paidAt || p.updatedAt).toISOString(),
           type: p.paymentType,
           tenant: p.user?.name
         }))
@@ -321,8 +324,11 @@ export async function GET(request: NextRequest) {
         const monthPayments = await prisma.payment.aggregate({
           where: {
             status: 'PAGADO',
-            paidAt: { gte: monthStart, lte: monthEnd },
-            propertyId: { in: propertyIds }
+            propertyId: { in: propertyIds },
+            OR: [
+              { paidAt: { gte: monthStart, lte: monthEnd } },
+              { paidAt: null, updatedAt: { gte: monthStart, lte: monthEnd } },
+            ],
           },
           _sum: { totalAmount: true }
         })
@@ -373,8 +379,11 @@ export async function GET(request: NextRequest) {
     const prevPayments = await prisma.payment.aggregate({
       where: {
         status: 'PAGADO',
-        paidAt: { gte: previousStart, lte: previousEnd },
-        propertyId: { in: propertyIds }
+        propertyId: { in: propertyIds },
+        OR: [
+          { paidAt: { gte: previousStart, lte: previousEnd } },
+          { paidAt: null, updatedAt: { gte: previousStart, lte: previousEnd } },
+        ],
       },
       _sum: { totalAmount: true }
     })
@@ -421,6 +430,7 @@ export async function GET(request: NextRequest) {
           category: t.category,
           status: t.status,
           priority: t.priority,
+          dueDate: t.dueDate?.toISOString() || null,
           createdAt: t.createdAt.toISOString(),
           property: {
             id: t.property.id,

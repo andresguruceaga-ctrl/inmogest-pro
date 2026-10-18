@@ -66,6 +66,10 @@ function dateInMonth(month: Date, day: number) {
   )
 }
 
+function endOfUtcMonth(month: Date) {
+  return dateInMonth(month, daysInUtcMonth(month.getUTCFullYear(), month.getUTCMonth()))
+}
+
 export function parseRecurringSupports(value: string | null | undefined): RecurringSupportInput[] {
   if (!value) return []
   try {
@@ -100,9 +104,9 @@ export function recurringSupportDueDates(
 ) {
   if (Number.isNaN(firstDate.getTime()) || frequencyMonths < 1 || contractStart > contractEnd) return []
 
-  return monthsBetween(contractStart, contractEnd)
-    .filter(month => isMonthOnSchedule(firstDate, frequencyMonths, month))
-    .map(month => dateInMonth(month, firstDate.getUTCDate()))
+  return monthsBetween(firstDate, contractEnd)
+    .filter((month, index) => (index + 1) % frequencyMonths === 0)
+    .map(endOfUtcMonth)
     .filter(dueDate => dueDate >= contractStart && dueDate <= contractEnd)
 }
 
@@ -180,8 +184,11 @@ export async function backfillContractRecords(
     const recurringStart = recurring.startsAt || contract.startDate
     for (const month of months) {
       if (!isMonthOnSchedule(recurringStart, recurring.frequencyMonths, month)) continue
-      const expenseDate = dateInMonth(month, 30)
-      if (expenseDate < recurringStart || (recurring.endsAt && expenseDate > recurring.endsAt)) continue
+      const expenseDate = dateInMonth(month, 1)
+      if (
+        endOfUtcMonth(month) < recurringStart ||
+        (recurring.endsAt && expenseDate > recurring.endsAt)
+      ) continue
       if (expenseDate > now) continue
       const automationKey = fixedExpenseAutomationKey(recurring.id, monthPeriod(month))
       const existing = await prisma.expense.findUnique({ where: { automationKey } })

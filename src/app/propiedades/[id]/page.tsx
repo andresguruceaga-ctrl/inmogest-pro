@@ -35,6 +35,9 @@ interface PropertyDetail {
   district: string
   province: string
   monthlyRent: number
+  forRent?: boolean
+  forSale?: boolean
+  salePrice?: number | null
   status: string
   mainImage?: string | null
   owner?: { name: string; email: string } | null
@@ -152,8 +155,8 @@ export default function PropertyWorkspacePage() {
                       </div>
                       <div className="grid gap-3 sm:grid-cols-3">
                         <div className="rounded-lg bg-muted/50 p-3">
-                          <p className="text-xs text-muted-foreground">Alquiler mensual</p>
-                          <p className="mt-1 font-semibold">{formatCurrency(property.monthlyRent)}</p>
+                          <p className="text-xs text-muted-foreground">{property.forRent !== false ? 'Alquiler mensual' : 'Precio de venta'}</p>
+                          <p className="mt-1 font-semibold">{formatCurrency(property.forRent !== false ? property.monthlyRent : property.salePrice || 0)}</p>
                         </div>
                         <div className="rounded-lg bg-muted/50 p-3">
                           <p className="text-xs text-muted-foreground">Propietario</p>
