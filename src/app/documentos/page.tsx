@@ -27,6 +27,7 @@ interface Document {
   fileSize: number | null
   mimeType: string | null
   uploadedAt: string
+  source?: string
   property: { id: string; title: string; address: string }
   uploader: { id: string; name: string; email: string }
 }
@@ -53,6 +54,15 @@ const documentTypes = [
   { value: 'INFORME', label: 'Informe' },
   { value: 'OTRO', label: 'Otro' },
 ]
+
+const sourceLabels: Record<string, string> = {
+  DOCUMENTO: 'Documento',
+  GASTO: 'Gasto',
+  PAGO: 'Pago',
+  PAGO_PROPIETARIO: 'Pago propietario',
+  SOPORTE: 'Soporte',
+  CONTRATO: 'Contrato',
+}
 
 export default function DocumentosPage() {
   const contextPropertyId = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || ''
@@ -312,7 +322,8 @@ export default function DocumentosPage() {
                       <TableRow>
                         <TableHead>Documento</TableHead>
                         <TableHead className="hidden md:table-cell">Propiedad</TableHead>
-                        <TableHead>Tipo</TableHead>
+                        <TableHead>Origen</TableHead>
+                        <TableHead className="hidden lg:table-cell">Tipo</TableHead>
                         <TableHead className="hidden md:table-cell">Tamaño</TableHead>
                         <TableHead>Subido</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
@@ -334,6 +345,9 @@ export default function DocumentosPage() {
                             {doc.property?.title || 'N/A'}
                           </TableCell>
                           <TableCell>
+                            <Badge variant="secondary">{sourceLabels[doc.source || 'DOCUMENTO'] || doc.source}</Badge>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">
                             <Badge variant="outline">{getDocumentTypeLabel(doc.documentType)}</Badge>
                           </TableCell>
                           <TableCell className="hidden md:table-cell text-muted-foreground">

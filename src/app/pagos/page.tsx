@@ -7,11 +7,10 @@ import { Footer } from '@/components/layout/footer'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CreditCard, Plus, ArrowUpRight, ArrowDownRight, Loader2, Upload, FileText, ImageIcon, Eye, Calendar, Building2, X, Check, MoreHorizontal, Edit, Trash2 } from 'lucide-react'
+import { CreditCard, Plus, Loader2, Upload, FileText, ImageIcon, Eye, Calendar, Building2, X, MoreHorizontal, Edit, Trash2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
@@ -61,14 +60,6 @@ const paymentMethods = [
   { value: 'TARJETA', label: 'Tarjeta de Crédito/Débito' },
 ]
 
-const statusOptions = [
-  { value: 'PENDIENTE', label: 'Pendiente' },
-  { value: 'PAGADO', label: 'Pagado' },
-  { value: 'ATRASADO', label: 'Atrasado' },
-  { value: 'PARCIAL', label: 'Parcial' },
-  { value: 'CANCELADO', label: 'Cancelado' },
-]
-
 export default function PagosPage() {
   const contextPropertyId = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('propertyId') || ''
   const [payments, setPayments] = useState<Payment[]>([])
@@ -78,11 +69,7 @@ export default function PagosPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [summary, setSummary] = useState({
-    totalAmount: 0,
-    byStatus: { pendiente: { count: 0, total: 0 }, pagado: { count: 0, total: 0 }, atrasado: { count: 0, total: 0 } },
-    overdueCount: 0
-  })
+  const [summary, setSummary] = useState({ totalAmount: 0 })
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editFileInputRef = useRef<HTMLInputElement>(null)
@@ -107,7 +94,6 @@ export default function PagosPage() {
     amount: '',
     referenceNumber: '',
     paymentMethod: 'TRANSFERENCIA',
-    status: 'PAGADO',
     dueDate: '',
     paidAt: '',
     propertyId: '',
@@ -302,7 +288,6 @@ export default function PagosPage() {
           amount: parseFloat(editFormData.amount),
           referenceNumber: editFormData.referenceNumber || null,
           paymentMethod: editFormData.paymentMethod,
-          status: editFormData.status,
           paidAt: editFormData.paidAt || null,
           dueDate: editFormData.dueDate,
           receiptImage: editFormData.receiptImage || null,
@@ -414,7 +399,6 @@ export default function PagosPage() {
       amount: String(payment.amount ?? 0),
       referenceNumber: payment.referenceNumber || '',
       paymentMethod: payment.paymentMethod || 'TRANSFERENCIA',
-      status: payment.status || 'PAGADO',
       dueDate: dueDateStr,
       paidAt: paidAtStr,
       propertyId: payment.property?.id || '',
@@ -449,21 +433,6 @@ export default function PagosPage() {
     return new Date(dateStr).toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'PAGADO':
-        return <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20"><Check className="h-3 w-3 mr-1" />Pagado</Badge>
-      case 'PENDIENTE':
-        return <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">Pendiente</Badge>
-      case 'ATRASADO':
-        return <Badge className="bg-red-500/10 text-red-500 border-red-500/20">Atrasado</Badge>
-      case 'PARCIAL':
-        return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">Parcial</Badge>
-      default:
-        return <Badge variant="secondary">{status}</Badge>
-    }
-  }
-
   const getPaymentTypeLabel = (type: string) => {
     const found = paymentTypes.find(p => p.value === type)
     return found?.label || type
@@ -481,6 +450,14 @@ export default function PagosPage() {
   nextMonth.setMonth(nextMonth.getMonth() + 1)
   nextMonth.setDate(5)
   const defaultDueDate = nextMonth.toISOString().split('T')[0]
+  const currentMonthPayments = payments.filter((payment) => {
+    const dueDate = new Date(payment.dueDate)
+    const now = new Date()
+    return dueDate.getMonth() === now.getMonth() && dueDate.getFullYear() === now.getFullYear()
+  })
+  const currentMonthTotal = currentMonthPayments.reduce((sum, payment) => sum + payment.totalAmount, 0)
+  const paymentsWithReceipt = payments.filter(payment => Boolean(payment.receiptImage)).length
+  const averagePayment = payments.length > 0 ? summary.totalAmount / payments.length : 0
 
   return (
     <SidebarProvider>
@@ -504,38 +481,30 @@ export default function PagosPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardContent className="pt-6">
-                  <p className="text-sm text-muted-foreground">Total Recibido</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-2xl font-bold text-emerald-500">${summary.byStatus.pagado.total.toLocaleString()}</span>
-                    <ArrowUpRight className="h-4 w-4 text-emerald-500" />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">{summary.byStatus.pagado.count} pagos</p>
+                  <p className="text-sm text-muted-foreground">Total registrado</p>
+                  <p className="text-2xl font-bold text-emerald-500">${summary.totalAmount.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{payments.length} pagos</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
-                  <p className="text-sm text-muted-foreground">Pagos Pendientes</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-2xl font-bold text-yellow-500">${summary.byStatus.pendiente.total.toLocaleString()}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">{summary.byStatus.pendiente.count} pagos</p>
+                  <p className="text-sm text-muted-foreground">Mes actual</p>
+                  <p className="text-2xl font-bold">${currentMonthTotal.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{currentMonthPayments.length} pagos registrados</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
-                  <p className="text-sm text-muted-foreground">Pagos Atrasados</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-2xl font-bold text-red-500">${summary.byStatus.atrasado.total.toLocaleString()}</span>
-                    <ArrowDownRight className="h-4 w-4 text-red-500" />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">{summary.overdueCount} pagos</p>
+                  <p className="text-sm text-muted-foreground">Promedio por registro</p>
+                  <p className="text-2xl font-bold">${averagePayment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Calculado sobre el historial</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
-                  <p className="text-sm text-muted-foreground">Total General</p>
-                  <p className="text-2xl font-bold">${summary.totalAmount.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{payments.length} pagos registrados</p>
+                  <p className="text-sm text-muted-foreground">Con comprobante</p>
+                  <p className="text-2xl font-bold">{paymentsWithReceipt}</p>
+                  <p className="text-xs text-muted-foreground mt-1">de {payments.length} registros</p>
                 </CardContent>
               </Card>
             </div>
@@ -565,7 +534,6 @@ export default function PagosPage() {
                         <TableHead className="hidden md:table-cell">Inquilino</TableHead>
                         <TableHead className="hidden lg:table-cell">Referencia</TableHead>
                         <TableHead>Monto</TableHead>
-                        <TableHead>Estado</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -575,7 +543,7 @@ export default function PagosPage() {
                           <TableCell>
                             <div className="flex items-center gap-1 text-sm">
                               <Calendar className="h-3 w-3 text-muted-foreground" />
-                              {payment.paidAt ? formatDate(payment.paidAt) : formatDate(payment.dueDate)}
+                              {formatDate(payment.dueDate)}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -592,9 +560,6 @@ export default function PagosPage() {
                           </TableCell>
                           <TableCell className="font-medium">
                             ${payment.totalAmount.toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            {getStatusBadge(payment.status)}
                           </TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>
@@ -902,19 +867,6 @@ export default function PagosPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-status">Estado *</Label>
-                <Select value={editFormData.status} onValueChange={(v) => setEditFormData({...editFormData, status: v})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {statusOptions.map((status) => (
-                      <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="edit-referenceNumber">Número de Referencia</Label>
                 <Input
                   id="edit-referenceNumber"
@@ -1058,10 +1010,6 @@ export default function PagosPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Referencia</p>
                   <p className="font-medium">{selectedPayment.referenceNumber || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Estado</p>
-                  {getStatusBadge(selectedPayment.status)}
                 </div>
               </div>
               

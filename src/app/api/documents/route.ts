@@ -16,6 +16,40 @@ const createDocumentSchema = z.object({
   uploadedBy: z.string().min(1, 'El usuario que sube el documento es requerido'),
 });
 
+type LinkedAttachment = {
+  name?: string
+  url?: string
+  type?: string
+  size?: number
+}
+
+function parseAttachments(value: string | null): LinkedAttachment[] {
+  if (!value) return []
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item): item is LinkedAttachment => (
+      typeof item === 'object' && item !== null && typeof (item as LinkedAttachment).url === 'string'
+    ))
+  } catch {
+    return []
+  }
+}
+
+function inferMimeType(url: string, declared?: string | null) {
+  if (declared) return declared
+  if (url.startsWith('data:')) return url.slice(5, url.indexOf(';')) || null
+  if (/\.pdf(?:$|\?)/i.test(url)) return 'application/pdf'
+  if (/\.(?:jpe?g|png|webp)(?:$|\?)/i.test(url)) return 'image/*'
+  return null
+}
+
+function inferFileName(url: string, fallback: string) {
+  if (url.startsWith('data:')) return fallback
+  const pathName = url.split('?')[0].split('/').pop()
+  return pathName ? decodeURIComponent(pathName) : fallback
+}
+
 // GET - Listar documentos
 export async function GET(request: NextRequest) {
   let prisma;
@@ -61,7 +95,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const documents = await prisma.document.findMany({
+    const storedDocuments = await prisma.document.findMany({
       where,
       include: {
         property: {
@@ -86,16 +120,216 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    const linkedPropertyWhere: Record<string, unknown> = {}
+    if (auth.user.role === 'PROPIETARIO') linkedPropertyWhere.ownerId = auth.user.id
+    if (auth.user.role === 'INQUILINO') linkedPropertyWhere.tenantId = auth.user.id
+    if (propertyId) linkedPropertyWhere.id = propertyId
+    const linkedWhere = Object.keys(linkedPropertyWhere).length > 0
+      ? { property: linkedPropertyWhere }
+      : {}
+    const propertySelect = { id: true, title: true, address: true }
+
+    const [expenses, payments, ownerPayments, tickets, contracts] = await Promise.all([
+      auth.user.role === 'INQUILINO'
+        ? Promise.resolve([])
+        : prisma.expense.findMany({
+            where: linkedWhere,
+            select: {
+              id: true, title: true, invoiceImage: true, workEvidence: true, updatedAt: true,
+              property: { select: propertySelect },
+            },
+          }),
+      prisma.payment.findMany({
+        where: {
+          ...linkedWhere,
+          ...(auth.user.role === 'INQUILINO' ? { userId: auth.user.id } : {}),
+        },
+        select: {
+          id: true, paymentType: true, receiptImage: true, updatedAt: true,
+          property: { select: propertySelect },
+        },
+      }),
+      auth.user.role === 'INQUILINO'
+        ? Promise.resolve([])
+        : prisma.ownerPayment.findMany({
+            where: {
+              propertyId: { not: null },
+              ...(Object.keys(linkedPropertyWhere).length > 0 ? { property: linkedPropertyWhere } : {}),
+            },
+            select: {
+              id: true, receiptImage: true, updatedAt: true,
+              property: { select: propertySelect },
+            },
+          }),
+      prisma.supportTicket.findMany({
+        where: {
+          ...linkedWhere,
+          ...(auth.user.role === 'INQUILINO' ? { userId: auth.user.id } : {}),
+        },
+        select: {
+          id: true, title: true, attachments: true, updatedAt: true,
+          property: { select: propertySelect },
+        },
+      }),
+      prisma.contract.findMany({
+        where: {
+          ...linkedWhere,
+          ...(auth.user.role === 'INQUILINO' ? { tenantId: auth.user.id } : {}),
+        },
+        select: {
+          id: true, contractNumber: true, contractType: true, documentUrl: true,
+          attachments: true, updatedAt: true, property: { select: propertySelect },
+        },
+      }),
+    ])
+
+    const systemUploader = { id: 'linked-record', name: 'Registro asociado', email: '', role: 'ADMIN' }
+    const linkedDocuments: Array<Record<string, unknown>> = []
+    const addLinkedDocument = (input: {
+      id: string
+      title: string
+      description: string
+      documentType: string
+      fileUrl: string | null
+      fileName: string
+      fileSize?: number | null
+      mimeType?: string | null
+      uploadedAt: Date
+      property: { id: string; title: string; address: string }
+      source: string
+    }) => {
+      if (!input.fileUrl) return
+      linkedDocuments.push({
+        ...input,
+        fileSize: input.fileSize ?? null,
+        mimeType: inferMimeType(input.fileUrl, input.mimeType),
+        updatedAt: input.uploadedAt,
+        uploader: systemUploader,
+      })
+    }
+
+    expenses.forEach(expense => {
+      addLinkedDocument({
+        id: `expense-invoice:${expense.id}`,
+        title: `Factura · ${expense.title}`,
+        description: 'Comprobante asociado al gasto',
+        documentType: 'FACTURA',
+        fileUrl: expense.invoiceImage,
+        fileName: expense.invoiceImage ? inferFileName(expense.invoiceImage, `factura-${expense.id}.pdf`) : '',
+        uploadedAt: expense.updatedAt,
+        property: expense.property,
+        source: 'GASTO',
+      })
+      addLinkedDocument({
+        id: `expense-evidence:${expense.id}`,
+        title: `Evidencia · ${expense.title}`,
+        description: 'Evidencia de trabajo asociada al gasto',
+        documentType: 'OTRO',
+        fileUrl: expense.workEvidence,
+        fileName: expense.workEvidence ? inferFileName(expense.workEvidence, `evidencia-${expense.id}.jpg`) : '',
+        uploadedAt: expense.updatedAt,
+        property: expense.property,
+        source: 'GASTO',
+      })
+    })
+
+    payments.forEach(payment => addLinkedDocument({
+      id: `payment:${payment.id}`,
+      title: `Comprobante de ${String(payment.paymentType).toLowerCase()}`,
+      description: 'Comprobante asociado al pago del inquilino',
+      documentType: 'RECIBO',
+      fileUrl: payment.receiptImage,
+      fileName: payment.receiptImage ? inferFileName(payment.receiptImage, `pago-${payment.id}.pdf`) : '',
+      uploadedAt: payment.updatedAt,
+      property: payment.property,
+      source: 'PAGO',
+    }))
+
+    ownerPayments.forEach(payment => {
+      if (!payment.property) return
+      addLinkedDocument({
+        id: `owner-payment:${payment.id}`,
+        title: 'Comprobante de pago del propietario',
+        description: 'Comprobante asociado a la relación de gastos',
+        documentType: 'RECIBO',
+        fileUrl: payment.receiptImage,
+        fileName: payment.receiptImage ? inferFileName(payment.receiptImage, `pago-propietario-${payment.id}.pdf`) : '',
+        uploadedAt: payment.updatedAt,
+        property: payment.property,
+        source: 'PAGO_PROPIETARIO',
+      })
+    })
+
+    tickets.forEach(ticket => parseAttachments(ticket.attachments).forEach((attachment, index) => addLinkedDocument({
+      id: `support:${ticket.id}:${index}`,
+      title: `${ticket.title} · ${attachment.name || `Adjunto ${index + 1}`}`,
+      description: 'Archivo asociado al soporte',
+      documentType: 'OTRO',
+      fileUrl: attachment.url || null,
+      fileName: attachment.name || `soporte-${ticket.id}-${index + 1}`,
+      fileSize: typeof attachment.size === 'number' ? attachment.size : null,
+      mimeType: attachment.type || null,
+      uploadedAt: ticket.updatedAt,
+      property: ticket.property,
+      source: 'SOPORTE',
+    })))
+
+    contracts.forEach(contract => {
+      const contractType = contract.contractType === 'ARRENDAMIENTO'
+        ? 'CONTRATO_ARRENDAMIENTO'
+        : 'CONTRATO_ADMINISTRACION'
+      addLinkedDocument({
+        id: `contract-document:${contract.id}`,
+        title: `Contrato ${contract.contractNumber}`,
+        description: 'Documento principal del contrato',
+        documentType: contractType,
+        fileUrl: contract.documentUrl,
+        fileName: contract.documentUrl ? inferFileName(contract.documentUrl, `contrato-${contract.contractNumber}.pdf`) : '',
+        uploadedAt: contract.updatedAt,
+        property: contract.property,
+        source: 'CONTRATO',
+      })
+      parseAttachments(contract.attachments).forEach((attachment, index) => addLinkedDocument({
+        id: `contract-attachment:${contract.id}:${index}`,
+        title: `Contrato ${contract.contractNumber} · ${attachment.name || `Adjunto ${index + 1}`}`,
+        description: 'Archivo adjunto al contrato',
+        documentType: contractType,
+        fileUrl: attachment.url || null,
+        fileName: attachment.name || `contrato-${contract.contractNumber}-${index + 1}`,
+        fileSize: typeof attachment.size === 'number' ? attachment.size : null,
+        mimeType: attachment.type || null,
+        uploadedAt: contract.updatedAt,
+        property: contract.property,
+        source: 'CONTRATO',
+      }))
+    })
+
+    const combined = [
+      ...storedDocuments.map(document => ({ ...document, source: 'DOCUMENTO' })),
+      ...linkedDocuments,
+    ]
+      .filter(document => !documentType || String(document.documentType) === documentType.toUpperCase())
+      .filter(document => {
+        if (!search) return true
+        const needle = search.toLocaleLowerCase('es')
+        return [document.title, document.description, document.fileName]
+          .some(value => String(value || '').toLocaleLowerCase('es').includes(needle))
+      })
+      .sort((a, b) => new Date(String(b.uploadedAt)).getTime() - new Date(String(a.uploadedAt)).getTime())
+    const documents = Array.from(new Map(
+      combined.map(document => [`${document.property.id}:${document.fileUrl}`, document])
+    ).values())
+
     // Calcular estadísticas
-    const totalSize = documents.reduce((sum, d) => sum + (d.fileSize || 0), 0);
+    const totalSize = documents.reduce((sum, d) => sum + (Number(d.fileSize) || 0), 0);
 
     const byType = documents.reduce((acc, doc) => {
-      const type = doc.documentType;
+      const type = String(doc.documentType);
       if (!acc[type]) {
         acc[type] = { count: 0, size: 0 };
       }
       acc[type].count++;
-      acc[type].size += doc.fileSize || 0;
+      acc[type].size += Number(doc.fileSize) || 0;
       return acc;
     }, {} as Record<string, { count: number; size: number }>);
 

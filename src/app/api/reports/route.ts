@@ -118,7 +118,6 @@ export async function GET(request: NextRequest) {
     // Obtener pagos del período
     const payments = await prisma.payment.findMany({
       where: {
-        status: 'PAGADO',
         propertyId: { in: propertyIds },
         // El informe reconoce el ingreso en el mes al que corresponde la
         // mensualidad. paidAt conserva la fecha real de cobro, pero no debe
@@ -323,7 +322,6 @@ export async function GET(request: NextRequest) {
 
         const monthPayments = await prisma.payment.aggregate({
           where: {
-            status: 'PAGADO',
             propertyId: { in: propertyIds },
             dueDate: { gte: monthStart, lte: monthEnd },
           },
@@ -375,7 +373,6 @@ export async function GET(request: NextRequest) {
 
     const prevPayments = await prisma.payment.aggregate({
       where: {
-        status: 'PAGADO',
         propertyId: { in: propertyIds },
         dueDate: { gte: previousStart, lte: previousEnd },
       },
