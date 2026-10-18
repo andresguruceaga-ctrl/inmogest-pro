@@ -120,16 +120,16 @@ export async function GET(request: NextRequest) {
       where: {
         status: 'PAGADO',
         propertyId: { in: propertyIds },
-        OR: [
-          { paidAt: { gte: startDate, lte: endDate } },
-          { paidAt: null, updatedAt: { gte: startDate, lte: endDate } },
-        ],
+        // El informe reconoce el ingreso en el mes al que corresponde la
+        // mensualidad. paidAt conserva la fecha real de cobro, pero no debe
+        // mover mensualidades históricas al mes en que fueron actualizadas.
+        dueDate: { gte: startDate, lte: endDate },
       },
       include: {
         property: { select: { id: true, title: true } },
         user: { select: { id: true, name: true } }
       },
-      orderBy: { paidAt: 'desc' }
+      orderBy: { dueDate: 'desc' }
     })
 
     // Obtener tickets del período
@@ -276,7 +276,7 @@ export async function GET(request: NextRequest) {
         paymentsDetails: propertyPayments.map(p => ({
           id: p.id,
           amount: p.totalAmount,
-          date: (p.paidAt || p.updatedAt).toISOString(),
+          date: p.dueDate.toISOString(),
           type: p.paymentType,
           tenant: p.user?.name
         }))
@@ -325,10 +325,7 @@ export async function GET(request: NextRequest) {
           where: {
             status: 'PAGADO',
             propertyId: { in: propertyIds },
-            OR: [
-              { paidAt: { gte: monthStart, lte: monthEnd } },
-              { paidAt: null, updatedAt: { gte: monthStart, lte: monthEnd } },
-            ],
+            dueDate: { gte: monthStart, lte: monthEnd },
           },
           _sum: { totalAmount: true }
         })
@@ -380,10 +377,7 @@ export async function GET(request: NextRequest) {
       where: {
         status: 'PAGADO',
         propertyId: { in: propertyIds },
-        OR: [
-          { paidAt: { gte: previousStart, lte: previousEnd } },
-          { paidAt: null, updatedAt: { gte: previousStart, lte: previousEnd } },
-        ],
+        dueDate: { gte: previousStart, lte: previousEnd },
       },
       _sum: { totalAmount: true }
     })
